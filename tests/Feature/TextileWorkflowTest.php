@@ -436,4 +436,16 @@ class TextileWorkflowTest extends TestCase
         $this->assertDatabaseHas('users', ['email' => 'second-tenant@example.com', 'role' => 'admin']);
         $this->get('/admin-management')->assertInertia(fn (AssertableInertia $page) => $page->has('data.admins', 3));
     }
+
+    public function test_super_admin_name_cannot_be_reused_for_a_regular_admin_account(): void
+    {
+        config(['workspace.super_admin_names' => ['Ali']]);
+        $owner = User::factory()->create(['name' => 'Ali', 'role' => 'admin']);
+
+        $this->actingAs($owner)->from('/admin-management')->post('/admin-management/users', [
+            'name' => 'ali', 'email' => 'ali-tenant@example.com', 'password' => 'SecurePassword123',
+            'modules' => ['dashboard', 'customers'],
+        ])->assertRedirect('/admin-management')->assertSessionHasErrors('name');
+        $this->assertDatabaseMissing('users', ['email' => 'ali-tenant@example.com']);
+    }
 }

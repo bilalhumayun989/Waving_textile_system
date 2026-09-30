@@ -27,7 +27,8 @@ class AdminManagementController extends Controller
                 ->reject(fn (User $user): bool => $user->isSuperAdmin())
                 ->map(fn (User $user): array => ['id' => $user->id, 'name' => $user->name, 'email' => $user->email,
                     'modules' => $user->modules ?? array_keys(config('workspace.modules'))])->values(),
-                'module_options' => config('workspace.modules')],
+                'module_options' => config('workspace.modules'),
+                'reserved_names' => config('workspace.super_admin_names', [])],
             'today' => today()->toDateString(), 'demo' => config('app.demo', false),
         ]);
     }
