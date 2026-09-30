@@ -38,6 +38,7 @@ class TextileService
             }
             $id = match ($action) {
                 'customers' => $this->customer($input),
+                'units' => $this->unit($input),
                 'invoices' => $this->invoice($input),
                 'receipts' => $this->receipt($input),
                 'accounts' => $this->account($input),
@@ -81,6 +82,22 @@ class TextileService
         return $this->insert('customers', $data);
     }
 
+    public function unit(array $input): int
+    {
+        $name = trim((string) ($input['name'] ?? ''));
+        $nameKey = mb_strtolower($name);
+        $standardNames = ['piece', 'meter', 'yard', 'kg', 'dozen', 'bundle', 'roll', 'lot'];
+        $data = Validator::make(['name' => $name, 'meters_per_unit' => $input['meters_per_unit'] ?? null], [
+            'name' => 'required|string|max:30', 'meters_per_unit' => 'required|numeric|gt:0|max:1000000',
+        ])->validate();
+        if (in_array($nameKey, $standardNames, true) || DB::table('units')->where('name_key', $nameKey)->exists()) {
+            $this->fail('name', 'That unit name already exists. Choose a different name.');
+        }
+
+        return $this->insert('units', ['name' => $data['name'], 'name_key' => $nameKey,
+            'meters_per_unit' => $data['meters_per_unit']]);
+    }
+
     public function invoice(array $input): int
     {
         $data = Validator::make($input, [
@@ -93,8 +110,14 @@ class TextileService
         if (DB::table('customers')->where('id', $data['customer_id'])->value('status') !== 'Active') {
             $this->fail('customer_id', 'Select an active customer.');
         }
-        $items = array_map(fn ($row) => [...$row, 'rate' => self::cents($row['rate']),
-            'amount' => (int) round(round((float) $row['quantity'], 3) * self::cents($row['rate']))], $data['items']);
+        $items = array_map(function (array $row, int $index): array {
+            $unit = DB::table('units')->where('name_key', mb_strtolower(trim($row['unit'])))->first();
+            $multiplier = $unit ? (float) $unit->meters_per_unit : 1;
+            $rate = self::cents($row['rate']);
+
+            return [...$row, 'rate' => $rate, 'unit_multiplier' => $multiplier,
+                'amount' => (int) round(round((float) $row['quantity'], 3) * $multiplier * $rate)];
+        }, $data['items'], array_keys($data['items']));
         $subtotal = array_sum(array_column($items, 'amount'));
         $discount = self::cents($data['discount'] ?? 0);
         if ($discount >= $subtotal) {
@@ -484,7 +507,7 @@ class TextileService
     public function snapshot(): array
     {
         $data = ['production' => app(ProductionReport::class)->records()];
-        foreach (['customers', 'accounts', 'invoices', 'receipts', 'employees', 'attendance', 'payrolls', 'expenses', 'fixed_expenses', 'gate_passes', 'transactions', 'audit_logs'] as $table) {
+        foreach (['customers', 'accounts', 'invoices', 'receipts', 'employees', 'attendance', 'payrolls', 'expenses', 'fixed_expenses', 'gate_passes', 'transactions', 'audit_logs', 'units'] as $table) {
             $data[$table] = DB::table($table)->orderByDesc('id')->get()->map(fn ($row) => (array) $row)->all();
         }
         $data['invoice_items'] = DB::table('invoice_items')->get()->map(fn ($r) => (array) $r)->all();

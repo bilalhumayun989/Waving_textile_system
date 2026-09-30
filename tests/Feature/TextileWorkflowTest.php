@@ -78,6 +78,21 @@ class TextileWorkflowTest extends TestCase
         $this->assertDatabaseHas('customers', ['id' => $withoutOpeningBalance, 'opening_balance' => 0]);
     }
 
+    public function test_saved_custom_length_units_are_available_later_and_convert_invoice_totals(): void
+    {
+        $unit = $this->save('units', ['name' => 'Guize', 'meters_per_unit' => 4.5]);
+        $this->assertDatabaseHas('units', ['id' => $unit, 'name' => 'Guize', 'name_key' => 'guize', 'meters_per_unit' => 4.5]);
+        $this->assertSame('Guize', $this->service->snapshot()['units'][0]['name']);
+
+        $invoice = $this->save('invoices', ['customer_id' => $this->customer, 'date' => '2026-09-29', 'due_date' => '2026-10-01',
+            'items' => [['description' => 'Custom length fabric', 'unit' => 'Guize', 'quantity' => 3, 'rate' => 10]]]);
+        $this->assertDatabaseHas('invoice_items', ['invoice_id' => $invoice, 'unit' => 'Guize', 'unit_multiplier' => 4.5, 'amount' => 13500]);
+        $this->assertDatabaseHas('invoices', ['id' => $invoice, 'total' => 13500]);
+
+        $this->expectException(ValidationException::class);
+        $this->save('units', ['name' => ' guIZE ', 'meters_per_unit' => 2]);
+    }
+
     public function test_customer_can_be_edited_and_deleted_until_financial_history_exists(): void
     {
         $customer = $this->save('customers', ['name' => 'Editable Customer', 'phone' => '5557770011']);
