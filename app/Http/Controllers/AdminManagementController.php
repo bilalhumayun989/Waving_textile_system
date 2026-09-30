@@ -19,7 +19,10 @@ class AdminManagementController extends Controller
 
         return Inertia::render('Workspace', [
             'page' => 'admin-management', 'recordId' => null,
-            'data' => ['admins' => User::where('role', 'admin')->orderBy('name')->get()
+            'data' => ['customers' => [], 'invoices' => [], 'receipts' => [], 'employees' => [], 'fixed_expenses' => [],
+                'expenses' => [], 'payrolls' => [], 'attendance' => [], 'accounts' => [], 'transactions' => [],
+                'audit_logs' => [], 'gate_passes' => [], 'invoice_items' => [], 'allocations' => [], 'units' => [], 'production' => [],
+                'admins' => User::where('role', 'admin')->orderBy('name')->get()
                 ->reject(fn (User $user): bool => $user->isSuperAdmin())
                 ->map(fn (User $user): array => ['id' => $user->id, 'name' => $user->name, 'email' => $user->email,
                     'modules' => $user->modules ?? array_keys(config('workspace.modules'))])->values(),
