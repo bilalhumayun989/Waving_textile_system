@@ -64,7 +64,7 @@ class DatabaseSeeder extends Seeder
                 $post('expenses', ['date' => today()->subDays($i + 1)->toDateString(), 'category' => $row[0], 'description' => $row[1], 'amount' => $row[2], 'account_id' => $cash]);
             }
             for ($i = 0; $i < 5; $i++) {
-                $post('gate-passes', ['invoice_id' => $i + 1, 'date' => today()->subDays($i)->toDateString(), 'type' => 'Outward',
+                $post('gate-passes', ['name' => 'DEMO DELIVERY '.str_pad((string) ($i + 1), 3, '0', STR_PAD_LEFT), 'invoice_id' => $i + 1, 'date' => today()->subDays($i)->toDateString(), 'type' => 'Outward',
                     'vehicle' => 'TRK-'.(402 + $i), 'driver' => 'Demo driver '.($i + 1), 'description' => $fabrics[$i],
                     'quantity' => 80 + $i * 37, 'unit' => 'Meter', 'purpose' => 'Customer delivery', 'authorised_by' => 'Alex Morgan']);
             }

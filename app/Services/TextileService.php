@@ -296,11 +296,16 @@ class TextileService
 
     public function gatePass(array $input): int
     {
+        $input['name'] = trim((string) ($input['name'] ?? ''));
         $data = Validator::make($input, ['customer_id' => 'nullable|exists:customers,id', 'invoice_id' => 'nullable|exists:invoices,id',
-            'date' => 'required|date_format:Y-m-d', 'type' => 'required|in:Outward,Inward', 'party' => 'nullable|string|max:120',
+            'name' => 'required|string|max:120', 'date' => 'required|date_format:Y-m-d', 'type' => 'required|in:Outward,Inward', 'party' => 'nullable|string|max:120',
             'vehicle' => 'nullable|string|max:80', 'driver' => 'nullable|string|max:120', 'description' => 'required|string|max:1000',
             'quantity' => 'required|numeric|min:0.001|max:1000000', 'unit' => 'required|string|max:30', 'purpose' => 'required|string|max:500',
             'authorised_by' => 'required|string|max:120'])->validate();
+        $data['name_key'] = mb_strtolower($data['name']);
+        if (DB::table('gate_passes')->where('name_key', $data['name_key'])->exists()) {
+            $this->fail('name', 'This gate pass name is already in use. Enter a unique name.');
+        }
         if (! empty($data['invoice_id'])) {
             $invoice = DB::table('invoices')->where('id', $data['invoice_id'])->first();
             if ($invoice->status !== 'Posted') {

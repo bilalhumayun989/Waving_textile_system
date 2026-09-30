@@ -183,9 +183,26 @@ class TextileWorkflowTest extends TestCase
     public function test_gate_pass_infers_customer_from_invoice(): void
     {
         $invoice = $this->invoice();
-        $id = $this->save('gate-passes', ['invoice_id' => $invoice, 'date' => '2026-09-29', 'type' => 'Outward',
+        $id = $this->save('gate-passes', ['name' => 'Cotton delivery September 29', 'invoice_id' => $invoice, 'date' => '2026-09-29', 'type' => 'Outward',
             'description' => 'Cotton', 'quantity' => 10, 'unit' => 'Meter', 'purpose' => 'Delivery', 'authorised_by' => 'Supervisor']);
-        $this->assertDatabaseHas('gate_passes', ['id' => $id, 'invoice_id' => $invoice, 'customer_id' => $this->customer]);
+        $this->assertDatabaseHas('gate_passes', ['id' => $id, 'name' => 'Cotton delivery September 29', 'invoice_id' => $invoice, 'customer_id' => $this->customer]);
+    }
+
+    public function test_gate_pass_names_are_trimmed_and_unique_without_case_sensitivity(): void
+    {
+        $base = ['date' => '2026-09-29', 'type' => 'Outward', 'description' => 'Cotton', 'quantity' => 10,
+            'unit' => 'Meter', 'purpose' => 'Delivery', 'authorised_by' => 'Supervisor'];
+        $id = $this->save('gate-passes', ['name' => '  Lot A dispatch  ', ...$base]);
+        $this->assertDatabaseHas('gate_passes', ['id' => $id, 'name' => 'Lot A dispatch', 'name_key' => 'lot a dispatch']);
+
+        try {
+            $this->save('gate-passes', ['name' => 'lot a DISPATCH', ...$base]);
+            $this->fail('A duplicate gate pass name must fail.');
+        } catch (ValidationException $exception) {
+            $this->assertArrayHasKey('name', $exception->errors());
+        }
+
+        $this->assertDatabaseCount('gate_passes', 1);
     }
 
     public function test_duplicate_normalised_phone_is_rejected(): void
