@@ -68,6 +68,40 @@ class TextileWorkflowTest extends TestCase
         $this->assertSame('Unpaid', $snapshot['invoices'][0]['payment_status']);
     }
 
+    public function test_customer_opening_balance_is_optional_and_saved_in_cents(): void
+    {
+        $customer = $this->save('customers', ['name' => 'Opening Balance Co', 'phone' => '5557770001', 'opening_balance' => '125.75']);
+        $this->assertDatabaseHas('customers', ['id' => $customer, 'opening_balance' => 12575]);
+        $this->assertSame(12575, collect($this->service->snapshot()['customers'])->firstWhere('id', $customer)['balance']);
+
+        $withoutOpeningBalance = $this->save('customers', ['name' => 'No Balance Co', 'phone' => '5557770002']);
+        $this->assertDatabaseHas('customers', ['id' => $withoutOpeningBalance, 'opening_balance' => 0]);
+    }
+
+    public function test_customer_can_be_edited_and_deleted_until_financial_history_exists(): void
+    {
+        $customer = $this->save('customers', ['name' => 'Editable Customer', 'phone' => '5557770011']);
+        $this->actingAs($this->admin)->post('/actions/update-customer', [
+            'submission_key' => (string) Str::uuid(), 'id' => $customer, 'name' => 'Edited Customer',
+            'phone' => '(555) 777-0011', 'email' => 'edited@example.com', 'address' => 'New address',
+            'tax_id' => 'TAX-2', 'opening_balance' => '250.50', 'status' => 'Active',
+        ])->assertRedirect();
+        $this->assertDatabaseHas('customers', ['id' => $customer, 'name' => 'Edited Customer', 'phone' => '5557770011', 'opening_balance' => 25050]);
+
+        $this->post('/actions/delete-customer', ['submission_key' => (string) Str::uuid(), 'id' => $customer])->assertRedirect();
+        $this->assertDatabaseMissing('customers', ['id' => $customer]);
+    }
+
+    public function test_customer_with_invoice_history_cannot_be_deleted(): void
+    {
+        $invoice = $this->invoice();
+        $customer = DB::table('invoices')->where('id', $invoice)->value('customer_id');
+
+        $this->actingAs($this->admin)->post('/actions/delete-customer', ['submission_key' => (string) Str::uuid(), 'id' => $customer])
+            ->assertSessionHasErrors('id');
+        $this->assertDatabaseHas('customers', ['id' => $customer]);
+    }
+
     public function test_receipt_allocates_multiple_invoices_stores_advance_and_reconciles_cash(): void
     {
         $one = $this->invoice(100);
@@ -203,6 +237,59 @@ class TextileWorkflowTest extends TestCase
         }
 
         $this->assertDatabaseCount('gate_passes', 1);
+    }
+
+    public function test_admin_can_edit_and_delete_gate_passes_and_actions_are_audited(): void
+    {
+        $base = ['name' => 'Morning cotton dispatch', 'date' => '2026-09-29', 'type' => 'Outward',
+            'description' => 'Cotton fabric', 'quantity' => 10, 'unit' => 'Meter', 'purpose' => 'Delivery',
+            'authorised_by' => 'Supervisor'];
+        $id = $this->save('gate-passes', $base);
+
+        $this->actingAs($this->admin)->post('/actions/update-gate-pass', [
+            'submission_key' => (string) Str::uuid(), 'id' => $id, ...$base, 'name' => 'Afternoon cotton dispatch',
+        ])->assertRedirect();
+        $this->assertDatabaseHas('gate_passes', ['id' => $id, 'name' => 'Afternoon cotton dispatch']);
+
+        $this->post('/actions/delete-gate-pass', ['submission_key' => (string) Str::uuid(), 'id' => $id])->assertRedirect();
+        $this->assertDatabaseMissing('gate_passes', ['id' => $id]);
+        $this->assertDatabaseHas('audit_logs', ['entity' => 'gate-passes', 'entity_id' => $id, 'action' => 'delete-gate-pass']);
+    }
+
+    public function test_staff_cannot_edit_or_delete_gate_passes(): void
+    {
+        $id = $this->save('gate-passes', ['name' => 'Staff test pass', 'date' => '2026-09-29', 'type' => 'Outward',
+            'description' => 'Cotton fabric', 'quantity' => 10, 'unit' => 'Meter', 'purpose' => 'Delivery',
+            'authorised_by' => 'Supervisor']);
+        $staff = User::factory()->create(['role' => 'staff']);
+
+        $this->actingAs($staff)->post('/actions/delete-gate-pass', ['submission_key' => (string) Str::uuid(), 'id' => $id])->assertForbidden();
+        $this->assertDatabaseHas('gate_passes', ['id' => $id, 'name' => 'Staff test pass']);
+    }
+
+    public function test_employee_can_be_updated_and_deleted_only_without_history(): void
+    {
+        $employee = $this->employee();
+        $this->actingAs($this->admin)->post('/actions/update-employee', [
+            'submission_key' => (string) Str::uuid(), 'id' => $employee, 'name' => 'Updated worker',
+            'phone' => '55512345', 'department' => 'Finishing', 'designation' => 'Lead operator',
+            'joining_date' => '2026-01-01', 'salary_type' => 'Monthly', 'salary' => 3500, 'status' => 'Active',
+        ])->assertRedirect();
+        $this->assertDatabaseHas('employees', ['id' => $employee, 'name' => 'Updated worker', 'department' => 'Finishing', 'salary' => 350000]);
+
+        $this->post('/actions/delete-employee', ['submission_key' => (string) Str::uuid(), 'id' => $employee])->assertRedirect();
+        $this->assertDatabaseMissing('employees', ['id' => $employee]);
+    }
+
+    public function test_employee_with_payroll_history_cannot_be_deleted(): void
+    {
+        $employee = $this->employee();
+        $this->save('attendance', ['employee_ids' => [$employee], 'date' => '2026-09-01', 'status' => 'Present']);
+        $this->save('payrolls', ['employee_id' => $employee, 'period' => '2026-09']);
+
+        $this->actingAs($this->admin)->post('/actions/delete-employee', ['submission_key' => (string) Str::uuid(), 'id' => $employee])
+            ->assertSessionHasErrors('id');
+        $this->assertDatabaseHas('employees', ['id' => $employee, 'status' => 'Active']);
     }
 
     public function test_duplicate_normalised_phone_is_rejected(): void

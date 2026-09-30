@@ -15,3 +15,4 @@
 @media(prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 
 .sidebar .nav-item.active{background:#5733ae;color:#fff;box-shadow:0 4px 11px #48309335}.sidebar .nav-item.active svg{color:#fff}.sidebar .nav-item.active:hover{background:#45278e;color:#fff}
+.row-actions{display:flex;align-items:center;justify-content:flex-end;gap:5px}.row-actions .icon-button{border:1px solid #eeebf3;background:#fff}.row-actions .icon-button:hover{background:var(--purple-pale);color:var(--purple)}.row-actions .icon-button.danger,.button.danger{color:#b93857}.row-actions .icon-button.danger:hover,.button.danger{background:#fff0f2;border-color:#f2ccd3}.button.danger{border:1px solid #f2ccd3}

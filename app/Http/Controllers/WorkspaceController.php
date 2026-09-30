@@ -27,11 +27,11 @@ class WorkspaceController extends Controller
 
     public function store(Request $request, TextileService $service, string $action): RedirectResponse
     {
-        $adminActions = ['payrolls', 'pay-salary', 'void-invoice', 'manual-entry', 'accounts', 'update-customer', 'update-employee', 'toggle-fixed'];
+        $adminActions = ['payrolls', 'pay-salary', 'void-invoice', 'manual-entry', 'accounts', 'update-customer', 'delete-customer', 'update-employee', 'delete-employee', 'toggle-fixed', 'update-gate-pass', 'delete-gate-pass'];
         if (in_array($action, $adminActions)) {
             abort_unless($request->user()->role === 'admin', 403);
         }
-        if ($request->filled('date') && $request->date < today()->toDateString()) {
+        if ($request->filled('date') && $request->date < today()->toDateString() && $action !== 'update-gate-pass') {
             abort_unless($request->user()->role === 'admin', 403, 'Backdated entries require an administrator.');
         }
         $service->post($action, $request->except('_fixed_id'), $request->user()->id);

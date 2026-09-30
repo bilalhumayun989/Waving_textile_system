@@ -5,7 +5,7 @@ import {Card,Stat,Table,Ref,Badge,money,dateLabel,code,sum} from './UI';
 import {useColumns,cashColumns,runningTransactions} from './Modules';
 import {CustomerLedger,AuditTable} from './Reports';
 export default function RecordDetail({page,recordId,data,today,open,admin}){
- const table=page==='cashbook'?'accounts':page.replaceAll('-','_');const record=data[table].find(r=>r.id===recordId);const [tab,setTab]=useState('Overview');const cols=useColumns(data,open,admin);
+ const table=page==='cashbook'?'accounts':page.replaceAll('-','_');const record=data[table].find(r=>r.id===recordId);const [tab,setTab]=useState('Overview');const cols=useColumns(data,open,admin,today);
  const c=data.customers.find(c=>c.id===record.customer_id);const employee=data.employees.find(e=>e.id===record.employee_id);
  const relatedInvoices=data.invoices.filter(i=>i.customer_id===recordId);const relatedReceipts=data.receipts.filter(r=>r.customer_id===recordId);
  const action=(name,payload)=>router.post('/actions/'+name,{submission_key:crypto.randomUUID(),...payload},{preserveScroll:true});

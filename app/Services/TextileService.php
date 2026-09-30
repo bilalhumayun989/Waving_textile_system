@@ -50,10 +50,14 @@ class TextileService
                 'pay-fixed' => $this->payFixed($input),
                 'defer-fixed' => $this->deferFixed($input),
                 'gate-passes' => $this->gatePass($input),
+                'update-gate-pass' => $this->updateGatePass($input),
+                'delete-gate-pass' => $this->deleteGatePass($input),
                 'void-invoice' => $this->voidInvoice($input),
                 'manual-entry' => $this->manualEntry($input),
                 'update-customer' => $this->updateCustomer($input),
+                'delete-customer' => $this->deleteCustomer($input),
                 'update-employee' => $this->updateEmployee($input),
+                'delete-employee' => $this->deleteEmployee($input),
                 'toggle-fixed' => $this->toggleFixed($input),
                 default => abort(404),
             };
@@ -70,7 +74,9 @@ class TextileService
     {
         $input['phone'] = preg_replace('/[^0-9+]/', '', $input['phone'] ?? '');
         $data = Validator::make($input, ['name' => 'required|string|max:120', 'phone' => 'required|string|max:30|unique:customers',
-            'email' => 'nullable|email|max:160', 'address' => 'nullable|string|max:500', 'tax_id' => 'nullable|string|max:80'])->validate();
+            'email' => 'nullable|email|max:160', 'address' => 'nullable|string|max:500', 'tax_id' => 'nullable|string|max:80',
+            'opening_balance' => 'nullable|numeric|min:0|max:100000000'])->validate();
+        $data['opening_balance'] = self::cents($data['opening_balance'] ?? 0);
 
         return $this->insert('customers', $data);
     }
@@ -320,6 +326,52 @@ class TextileService
         return $this->insert('gate_passes', $data);
     }
 
+    public function updateGatePass(array $input): int
+    {
+        $input['name'] = trim((string) ($input['name'] ?? ''));
+        $data = Validator::make($input, ['id' => 'required|integer|exists:gate_passes,id',
+            'customer_id' => 'nullable|exists:customers,id', 'invoice_id' => 'nullable|exists:invoices,id',
+            'name' => 'required|string|max:120', 'date' => 'required|date_format:Y-m-d',
+            'type' => 'required|in:Outward,Inward', 'party' => 'nullable|string|max:120',
+            'vehicle' => 'nullable|string|max:80', 'driver' => 'nullable|string|max:120',
+            'description' => 'required|string|max:1000', 'quantity' => 'required|numeric|min:0.001|max:1000000',
+            'unit' => 'required|string|max:30', 'purpose' => 'required|string|max:500',
+            'authorised_by' => 'required|string|max:120'])->validate();
+        $data['name_key'] = mb_strtolower($data['name']);
+        $existing = DB::table('gate_passes')->where('id', $data['id'])->first();
+        if (DB::table('gate_passes')->where('name_key', $data['name_key'])->where('id', '!=', $data['id'])->exists()) {
+            $this->fail('name', 'This gate pass name is already in use. Enter a unique name.');
+        }
+        if (! empty($data['invoice_id'])) {
+            $invoice = DB::table('invoices')->where('id', $data['invoice_id'])->first();
+            if ($invoice->status !== 'Posted') {
+                $this->fail('invoice_id', 'A voided invoice cannot be dispatched.');
+            }
+            if (! empty($data['customer_id']) && $data['customer_id'] != $invoice->customer_id) {
+                $this->fail('customer_id', 'Customer must match the linked invoice.');
+            }
+            $data['customer_id'] = $invoice->customer_id;
+        }
+        $id = (int) $data['id'];
+        unset($data['id']);
+        DB::table('gate_passes')->where('id', $id)->update([...$data, 'updated_at' => now()]);
+        $this->insert('audit_logs', ['user_id' => auth()->id(), 'action' => 'update-gate-pass',
+            'entity' => 'gate-passes', 'entity_id' => $id, 'details' => json_encode(['before' => $existing, 'after' => $data])]);
+
+        return $id;
+    }
+
+    public function deleteGatePass(array $input): int
+    {
+        $data = Validator::make($input, ['id' => 'required|integer|exists:gate_passes,id'])->validate();
+        $record = DB::table('gate_passes')->where('id', $data['id'])->first();
+        DB::table('gate_passes')->where('id', $data['id'])->delete();
+        $this->insert('audit_logs', ['user_id' => auth()->id(), 'action' => 'delete-gate-pass',
+            'entity' => 'gate-passes', 'entity_id' => $data['id'], 'details' => json_encode($record)]);
+
+        return (int) $data['id'];
+    }
+
     public function voidInvoice(array $input): int
     {
         $data = Validator::make($input, ['invoice_id' => 'required|exists:invoices,id', 'reason' => 'required|string|min:5|max:500'])->validate();
@@ -351,18 +403,74 @@ class TextileService
 
     public function updateCustomer(array $input): int
     {
-        $data = Validator::make($input, ['id' => 'required|exists:customers,id', 'status' => 'required|in:Active,Inactive'])->validate();
-        DB::table('customers')->where('id', $data['id'])->update(['status' => $data['status'], 'updated_at' => now()]);
+        $rules = ['id' => 'required|exists:customers,id', 'status' => 'required|in:Active,Inactive'];
+        if (array_key_exists('name', $input)) {
+            $input['phone'] = preg_replace('/[^0-9+]/', '', $input['phone'] ?? '');
+            $rules = [...$rules, 'name' => 'required|string|max:120', 'phone' => 'required|string|max:30|unique:customers,phone,'.$input['id'],
+                'email' => 'nullable|email|max:160', 'address' => 'nullable|string|max:500', 'tax_id' => 'nullable|string|max:80',
+                'opening_balance' => 'nullable|numeric|min:0|max:100000000'];
+        }
+        $data = Validator::make($input, $rules)->validate();
+        if (array_key_exists('opening_balance', $data)) {
+            $data['opening_balance'] = self::cents($data['opening_balance'] ?? 0);
+        }
+        $id = (int) $data['id'];
+        unset($data['id']);
+        DB::table('customers')->where('id', $id)->update([...$data, 'updated_at' => now()]);
 
-        return (int) $data['id'];
+        return $id;
+    }
+
+    public function deleteCustomer(array $input): int
+    {
+        $data = Validator::make($input, ['id' => 'required|integer|exists:customers,id'])->validate();
+        $customerId = (int) $data['id'];
+        if (DB::table('invoices')->where('customer_id', $customerId)->exists() || DB::table('receipts')->where('customer_id', $customerId)->exists()) {
+            $this->fail('id', 'This customer has invoice or receipt history and cannot be deleted. Deactivate the customer instead.');
+        }
+        $customer = DB::table('customers')->where('id', $customerId)->first();
+        DB::table('customers')->where('id', $customerId)->delete();
+        $this->insert('audit_logs', ['user_id' => auth()->id(), 'action' => 'delete-customer', 'entity' => 'customers',
+            'entity_id' => $customerId, 'details' => json_encode($customer)]);
+
+        return $customerId;
     }
 
     public function updateEmployee(array $input): int
     {
-        $data = Validator::make($input, ['id' => 'required|exists:employees,id', 'status' => 'required|in:Active,Inactive'])->validate();
-        DB::table('employees')->where('id', $data['id'])->update(['status' => $data['status'], 'updated_at' => now()]);
+        $rules = ['id' => 'required|exists:employees,id', 'status' => 'required|in:Active,Inactive'];
+        if (collect(['name', 'phone', 'department', 'designation', 'joining_date', 'salary_type', 'salary'])->contains(fn ($field) => array_key_exists($field, $input))) {
+            $rules = [...$rules, 'name' => 'required|string|max:120', 'phone' => 'required|string|max:30',
+                'department' => 'required|string|max:80', 'designation' => 'required|string|max:80',
+                'joining_date' => 'required|date_format:Y-m-d', 'salary_type' => 'required|in:Monthly,Daily',
+                'salary' => 'required|numeric|min:0.01|max:10000000'];
+        }
+        $data = Validator::make($input, $rules)->validate();
+        if (isset($data['salary'])) {
+            $data['salary'] = self::cents($data['salary']);
+        }
+        $id = (int) $data['id'];
+        unset($data['id']);
+        DB::table('employees')->where('id', $id)->update([...$data, 'updated_at' => now()]);
 
-        return (int) $data['id'];
+        return $id;
+    }
+
+    public function deleteEmployee(array $input): int
+    {
+        $data = Validator::make($input, ['id' => 'required|integer|exists:employees,id'])->validate();
+        $employeeId = (int) $data['id'];
+        $hasPayroll = DB::table('payrolls')->where('employee_id', $employeeId)->exists();
+        $hasAttendance = DB::table('attendance')->where('employee_id', $employeeId)->exists();
+        if ($hasPayroll || $hasAttendance) {
+            $this->fail('id', 'This employee has payroll or attendance history and cannot be deleted. Deactivate the employee instead.');
+        }
+        $employee = DB::table('employees')->where('id', $employeeId)->first();
+        DB::table('employees')->where('id', $employeeId)->delete();
+        $this->insert('audit_logs', ['user_id' => auth()->id(), 'action' => 'delete-employee', 'entity' => 'employees',
+            'entity_id' => $employeeId, 'details' => json_encode($employee)]);
+
+        return $employeeId;
     }
 
     public function toggleFixed(array $input): int
