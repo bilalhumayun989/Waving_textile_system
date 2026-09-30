@@ -143,6 +143,29 @@ class TextileWorkflowTest extends TestCase
         $this->assertDatabaseCount('transactions', 1);
     }
 
+    public function test_receipt_payment_method_must_match_cash_bank_or_custom_wallet_account(): void
+    {
+        $bank = $this->save('accounts', ['name' => 'Main Bank', 'type' => 'Bank', 'opening_balance' => 0]);
+        $walletType = $this->save('account-types', ['name' => 'JazzCash']);
+        $wallet = $this->save('accounts', ['name' => 'JazzCash wallet', 'type' => 'JazzCash', 'opening_balance' => 0]);
+
+        $bankReceipt = $this->save('receipts', ['customer_id' => $this->customer, 'account_id' => $bank,
+            'date' => '2026-09-29', 'amount' => 25, 'method' => 'Bank transfer', 'allocation_mode' => 'oldest']);
+        $walletReceipt = $this->save('receipts', ['customer_id' => $this->customer, 'account_id' => $wallet,
+            'date' => '2026-09-29', 'amount' => 25, 'method' => 'JazzCash', 'allocation_mode' => 'oldest']);
+        $this->assertDatabaseHas('receipts', ['id' => $bankReceipt, 'method' => 'Bank transfer']);
+        $this->assertDatabaseHas('receipts', ['id' => $walletReceipt, 'method' => 'JazzCash']);
+        $this->assertNotEmpty($walletType);
+
+        try {
+            $this->receipt(10, ['method' => 'Bank transfer']);
+            $this->fail('Cash accounts must only accept Cash payments.');
+        } catch (ValidationException $exception) {
+            $this->assertArrayHasKey('method', $exception->errors());
+        }
+        $this->assertDatabaseCount('receipts', 2);
+    }
+
     public function test_invalid_allocation_rolls_back_receipt_cash_and_submission_key(): void
     {
         $id = $this->invoice(100);

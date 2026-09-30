@@ -184,10 +184,20 @@ class TextileService
     {
         $data = Validator::make($input, ['customer_id' => 'required|exists:customers,id', 'account_id' => 'required|exists:accounts,id',
             'date' => 'required|date_format:Y-m-d', 'amount' => 'required|numeric|min:0.01|max:100000000',
-            'method' => 'required|in:Cash,Bank transfer,Cheque,Card,Other', 'reference' => 'nullable|string|max:200',
+            'method' => 'required|string|max:60', 'reference' => 'nullable|string|max:200',
             'allocation_mode' => 'required|in:oldest,manual', 'allocations' => 'nullable|array',
             'allocations.*.invoice_id' => 'required|integer|distinct|exists:invoices,id',
             'allocations.*.amount' => 'required|numeric|min:0|max:100000000'])->validate();
+        $account = DB::table('accounts')->where('owner_id', $this->ownerId)->where('id', $data['account_id'])->first();
+        $accountType = mb_strtolower(trim((string) $account->type));
+        $methods = match ($accountType) {
+            'cash' => ['Cash'],
+            'bank' => ['Bank transfer', 'Cheque', 'Card', 'Other'],
+            default => array_values(array_unique([$account->type ?: $account->name, 'Online', 'Other'])),
+        };
+        if (! in_array($data['method'], $methods, true)) {
+            $this->fail('method', 'Choose a payment method that matches the selected receiving account.');
+        }
         DB::table('customers')->where('id', $data['customer_id'])->lockForUpdate()->first();
         $invoices = DB::table('invoices')->where('customer_id', $data['customer_id'])->where('status', 'Posted')->orderBy('date')->orderBy('id')->lockForUpdate()->get();
         $remaining = self::cents($data['amount']);
