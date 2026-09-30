@@ -93,6 +93,17 @@ class TextileWorkflowTest extends TestCase
         $this->save('units', ['name' => ' guIZE ', 'meters_per_unit' => 2]);
     }
 
+    public function test_custom_account_types_can_be_saved_and_used_by_accounts(): void
+    {
+        $type = $this->save('account-types', ['name' => 'Savings']);
+        $this->assertDatabaseHas('account_types', ['id' => $type, 'name' => 'Savings', 'name_key' => 'savings']);
+        $account = $this->save('accounts', ['name' => 'Reserve', 'type' => 'Savings', 'opening_balance' => 25]);
+        $this->assertDatabaseHas('accounts', ['id' => $account, 'type' => 'Savings', 'opening_balance' => 2500]);
+
+        $this->expectException(ValidationException::class);
+        $this->save('account-types', ['name' => ' savings ']);
+    }
+
     public function test_customer_can_be_edited_and_deleted_until_financial_history_exists(): void
     {
         $customer = $this->save('customers', ['name' => 'Editable Customer', 'phone' => '5557770011']);

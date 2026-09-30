@@ -25,7 +25,7 @@ class DatabaseSeeder extends Seeder
         $post = fn (string $action, array $data) => $service->post($action, ['submission_key' => (string) Str::uuid(), ...$data], $user->id);
         DB::transaction(function () use ($post) {
             $cash = $post('accounts', ['name' => 'Petty Cash', 'type' => 'Cash', 'opening_balance' => 25000]);
-            $bank = $post('accounts', ['name' => 'Business Account', 'type' => 'Bank', 'number' => '???? 4821', 'opening_balance' => 185000]);
+            $bank = $post('accounts', ['name' => 'Bank', 'type' => 'Bank', 'number' => '???? 4821', 'opening_balance' => 185000]);
             $names = ['Loom & Co.', 'Atlas Textiles', 'Cotton Collective', 'The Fabric House', 'Weave Studio', 'Northstar Apparel', 'Urban Threads', 'Heritage Mills'];
             $customers = [];
             foreach ($names as $i => $name) {

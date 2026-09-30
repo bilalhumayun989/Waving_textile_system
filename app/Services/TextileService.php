@@ -42,6 +42,7 @@ class TextileService
                 'invoices' => $this->invoice($input),
                 'receipts' => $this->receipt($input),
                 'accounts' => $this->account($input),
+                'account-types' => $this->accountType($input),
                 'employees' => $this->employee($input),
                 'attendance' => $this->attendance($input),
                 'payrolls' => $this->payroll($input),
@@ -188,11 +189,29 @@ class TextileService
 
     public function account(array $input): int
     {
-        $data = Validator::make($input, ['name' => 'required|string|max:100', 'type' => 'required|in:Cash,Bank',
+        $data = Validator::make($input, ['name' => 'required|string|max:100', 'type' => 'required|string|max:60',
             'number' => 'nullable|string|max:40', 'opening_balance' => 'required|numeric|min:0|max:100000000'])->validate();
+        $typeKey = mb_strtolower(trim($data['type']));
+        $type = DB::table('account_types')->where('name_key', $typeKey)->value('name');
+        if (! in_array($typeKey, ['cash', 'bank'], true) && ! $type) {
+            $this->fail('type', 'Choose Cash, Bank, or a saved account type.');
+        }
+        $data['type'] = $type ?: ucfirst($typeKey);
         $data['opening_balance'] = self::cents($data['opening_balance']);
 
         return $this->insert('accounts', $data);
+    }
+
+    public function accountType(array $input): int
+    {
+        $name = trim((string) ($input['name'] ?? ''));
+        $nameKey = mb_strtolower($name);
+        $data = Validator::make(['name' => $name], ['name' => 'required|string|max:60'])->validate();
+        if (in_array($nameKey, ['cash', 'bank'], true) || DB::table('account_types')->where('name_key', $nameKey)->exists()) {
+            $this->fail('name', 'That account type already exists. Choose a different name.');
+        }
+
+        return $this->insert('account_types', ['name' => $data['name'], 'name_key' => $nameKey]);
     }
 
     public function employee(array $input): int
@@ -507,7 +526,7 @@ class TextileService
     public function snapshot(): array
     {
         $data = ['production' => app(ProductionReport::class)->records()];
-        foreach (['customers', 'accounts', 'invoices', 'receipts', 'employees', 'attendance', 'payrolls', 'expenses', 'fixed_expenses', 'gate_passes', 'transactions', 'audit_logs', 'units'] as $table) {
+        foreach (['customers', 'accounts', 'account_types', 'invoices', 'receipts', 'employees', 'attendance', 'payrolls', 'expenses', 'fixed_expenses', 'gate_passes', 'transactions', 'audit_logs', 'units'] as $table) {
             $data[$table] = DB::table($table)->orderByDesc('id')->get()->map(fn ($row) => (array) $row)->all();
         }
         $data['invoice_items'] = DB::table('invoice_items')->get()->map(fn ($r) => (array) $r)->all();

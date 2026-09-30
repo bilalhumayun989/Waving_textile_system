@@ -27,7 +27,7 @@ class WorkspaceController extends Controller
 
     public function store(Request $request, TextileService $service, string $action): RedirectResponse
     {
-        $adminActions = ['payrolls', 'pay-salary', 'void-invoice', 'manual-entry', 'accounts', 'update-customer', 'delete-customer', 'update-employee', 'delete-employee', 'toggle-fixed', 'update-gate-pass', 'delete-gate-pass'];
+        $adminActions = ['payrolls', 'pay-salary', 'void-invoice', 'manual-entry', 'accounts', 'account-types', 'update-customer', 'delete-customer', 'update-employee', 'delete-employee', 'toggle-fixed', 'update-gate-pass', 'delete-gate-pass'];
         if (in_array($action, $adminActions)) {
             abort_unless($request->user()->role === 'admin', 403);
         }
