@@ -9,6 +9,8 @@ use Illuminate\Validation\ValidationException;
 
 class TextileService
 {
+    private ?int $ownerId = null;
+
     public static function cents(mixed $value): int
     {
         return (int) round((float) $value * 100);
@@ -16,7 +18,7 @@ class TextileService
 
     public function insert(string $table, array $data): int
     {
-        return DB::table($table)->insertGetId([...$data, 'created_at' => now(), 'updated_at' => now()]);
+        return DB::table($table)->insertGetId([...$data, 'owner_id' => $this->ownerId, 'created_at' => now(), 'updated_at' => now()]);
     }
 
     public function fail(string $field, string $message): never
@@ -24,14 +26,56 @@ class TextileService
         throw ValidationException::withMessages([$field => $message]);
     }
 
+    private function assertOwnedReferences(string $action, array $input, int $ownerId): void
+    {
+        $references = [
+            'customer_id' => 'customers', 'account_id' => 'accounts', 'invoice_id' => 'invoices',
+            'payroll_id' => 'payrolls', 'employee_id' => 'employees', 'fixed_expense_id' => 'fixed_expenses',
+        ];
+        foreach ($references as $field => $table) {
+            if (! empty($input[$field]) && ! DB::table($table)->where('owner_id', $ownerId)->where('id', $input[$field])->exists()) {
+                $this->fail($field, 'That record is not available in your workspace.');
+            }
+        }
+        foreach (['employee_ids' => 'employees', 'allocations' => 'invoices'] as $field => $table) {
+            foreach ($input[$field] ?? [] as $row) {
+                $id = is_array($row) ? ($row['invoice_id'] ?? null) : $row;
+                if ($id && ! DB::table($table)->where('owner_id', $ownerId)->where('id', $id)->exists()) {
+                    $this->fail($field, 'A selected record is not available in your workspace.');
+                }
+            }
+        }
+        $entity = match ($action) {
+            'update-customer', 'delete-customer' => 'customers',
+            'update-employee', 'delete-employee' => 'employees',
+            'update-gate-pass', 'delete-gate-pass' => 'gate_passes',
+            'void-invoice' => 'invoices',
+            'toggle-fixed', 'pay-fixed', 'defer-fixed' => 'fixed_expenses',
+            'pay-salary' => 'payrolls',
+            default => null,
+        };
+        if ($entity && ! empty($input['id']) && ! DB::table($entity)->where('owner_id', $ownerId)->where('id', $input['id'])->exists()) {
+            $this->fail('id', 'That record is not available in your workspace.');
+        }
+        if ($action === 'pay-salary' && ! empty($input['payroll_id']) && ! DB::table('payrolls')->where('owner_id', $ownerId)->where('id', $input['payroll_id'])->exists()) {
+            $this->fail('payroll_id', 'That payroll record is not available in your workspace.');
+        }
+        if ($action === 'manual-entry' && ! empty($input['account_id']) && ! DB::table('accounts')->where('owner_id', $ownerId)->where('id', $input['account_id'])->exists()) {
+            $this->fail('account_id', 'That account is not available in your workspace.');
+        }
+    }
+
     public function post(string $action, array $input, int $userId): int
     {
         Validator::make($input, ['submission_key' => 'required|uuid'])->validate();
 
+        $this->ownerId = $userId;
+        $this->assertOwnedReferences($action, $input, $userId);
+
         return DB::transaction(function () use ($action, $input, $userId) {
             $inserted = DB::table('submission_keys')->insertOrIgnore([
                 'key' => $input['submission_key'], 'user_id' => $userId, 'action' => $action,
-                'created_at' => now(), 'updated_at' => now(),
+                'owner_id' => $userId, 'created_at' => now(), 'updated_at' => now(),
             ]);
             if (! $inserted) {
                 return 0;
@@ -75,10 +119,13 @@ class TextileService
     public function customer(array $input): int
     {
         $input['phone'] = preg_replace('/[^0-9+]/', '', $input['phone'] ?? '');
-        $data = Validator::make($input, ['name' => 'required|string|max:120', 'phone' => 'required|string|max:30|unique:customers',
+        $data = Validator::make($input, ['name' => 'required|string|max:120', 'phone' => 'required|string|max:30',
             'email' => 'nullable|email|max:160', 'address' => 'nullable|string|max:500', 'tax_id' => 'nullable|string|max:80',
             'opening_balance' => 'nullable|numeric|min:0|max:100000000'])->validate();
         $data['opening_balance'] = self::cents($data['opening_balance'] ?? 0);
+        if (DB::table('customers')->where('owner_id', $this->ownerId)->where('phone', $data['phone'])->exists()) {
+            $this->fail('phone', 'This phone number is already in use in your workspace.');
+        }
 
         return $this->insert('customers', $data);
     }
@@ -91,7 +138,7 @@ class TextileService
         $data = Validator::make(['name' => $name, 'meters_per_unit' => $input['meters_per_unit'] ?? null], [
             'name' => 'required|string|max:30', 'meters_per_unit' => 'required|numeric|gt:0|max:1000000',
         ])->validate();
-        if (in_array($nameKey, $standardNames, true) || DB::table('units')->where('name_key', $nameKey)->exists()) {
+        if (in_array($nameKey, $standardNames, true) || DB::table('units')->where('owner_id', $this->ownerId)->where('name_key', $nameKey)->exists()) {
             $this->fail('name', 'That unit name already exists. Choose a different name.');
         }
 
@@ -108,11 +155,11 @@ class TextileService
             'items.*.description' => 'required|string|max:200', 'items.*.unit' => 'required|string|max:30',
             'items.*.quantity' => 'required|numeric|decimal:0,3|min:0.001|max:1000000', 'items.*.rate' => 'required|numeric|min:0.01|max:10000000',
         ])->validate();
-        if (DB::table('customers')->where('id', $data['customer_id'])->value('status') !== 'Active') {
+        if (DB::table('customers')->where('owner_id', $this->ownerId)->where('id', $data['customer_id'])->value('status') !== 'Active') {
             $this->fail('customer_id', 'Select an active customer.');
         }
         $items = array_map(function (array $row, int $index): array {
-            $unit = DB::table('units')->where('name_key', mb_strtolower(trim($row['unit'])))->first();
+            $unit = DB::table('units')->where('owner_id', $this->ownerId)->where('name_key', mb_strtolower(trim($row['unit'])))->first();
             $multiplier = $unit ? (float) $unit->meters_per_unit : 1;
             $rate = self::cents($row['rate']);
 
@@ -127,7 +174,7 @@ class TextileService
         $id = $this->insert('invoices', ['customer_id' => $data['customer_id'], 'date' => $data['date'], 'due_date' => $data['due_date'],
             'notes' => $data['notes'] ?? null, 'subtotal' => $subtotal, 'discount' => $discount, 'total' => $subtotal - $discount]);
         foreach ($items as $item) {
-            DB::table('invoice_items')->insert(['invoice_id' => $id, ...$item]);
+            DB::table('invoice_items')->insert(['invoice_id' => $id, 'owner_id' => $this->ownerId, ...$item]);
         }
 
         return $id;
@@ -174,7 +221,7 @@ class TextileService
         $id = $this->insert('receipts', collect($data)->except(['allocation_mode', 'allocations'])->merge([
             'amount' => self::cents($data['amount']), 'credit' => $remaining])->all());
         foreach ($allocations as $allocation) {
-            DB::table('allocations')->insert(['receipt_id' => $id, ...$allocation]);
+            DB::table('allocations')->insert(['receipt_id' => $id, 'owner_id' => $this->ownerId, ...$allocation]);
         }
         $this->movement((int) $data['account_id'], $data['date'], 'in', self::cents($data['amount']), 'receipts', $id, 'Customer payment');
 
@@ -192,7 +239,7 @@ class TextileService
         $data = Validator::make($input, ['name' => 'required|string|max:100', 'type' => 'required|string|max:60',
             'number' => 'nullable|string|max:40', 'opening_balance' => 'required|numeric|min:0|max:100000000'])->validate();
         $typeKey = mb_strtolower(trim($data['type']));
-        $type = DB::table('account_types')->where('name_key', $typeKey)->value('name');
+        $type = DB::table('account_types')->where('owner_id', $this->ownerId)->where('name_key', $typeKey)->value('name');
         if (! in_array($typeKey, ['cash', 'bank'], true) && ! $type) {
             $this->fail('type', 'Choose Cash, Bank, or a saved account type.');
         }
@@ -207,7 +254,7 @@ class TextileService
         $name = trim((string) ($input['name'] ?? ''));
         $nameKey = mb_strtolower($name);
         $data = Validator::make(['name' => $name], ['name' => 'required|string|max:60'])->validate();
-        if (in_array($nameKey, ['cash', 'bank'], true) || DB::table('account_types')->where('name_key', $nameKey)->exists()) {
+        if (in_array($nameKey, ['cash', 'bank'], true) || DB::table('account_types')->where('owner_id', $this->ownerId)->where('name_key', $nameKey)->exists()) {
             $this->fail('name', 'That account type already exists. Choose a different name.');
         }
 
@@ -234,7 +281,7 @@ class TextileService
             if (DB::table('payrolls')->where('employee_id', $employee)->where('period', substr($data['date'], 0, 7))->where('paid', '>', 0)->exists()) {
                 $this->fail('date', 'Attendance is locked because this month has a salary payment.');
             }
-            DB::table('attendance')->updateOrInsert(['employee_id' => $employee, 'date' => $data['date']],
+            DB::table('attendance')->updateOrInsert(['owner_id' => $this->ownerId, 'employee_id' => $employee, 'date' => $data['date']],
                 [...collect($data)->except(['employee_ids'])->all(), 'overtime' => $data['overtime'] ?? 0, 'created_at' => now(), 'updated_at' => now()]);
         }
 
@@ -351,7 +398,7 @@ class TextileService
             'quantity' => 'required|numeric|min:0.001|max:1000000', 'unit' => 'required|string|max:30', 'purpose' => 'required|string|max:500',
             'authorised_by' => 'required|string|max:120'])->validate();
         $data['name_key'] = mb_strtolower($data['name']);
-        if (DB::table('gate_passes')->where('name_key', $data['name_key'])->exists()) {
+        if (DB::table('gate_passes')->where('owner_id', $this->ownerId)->where('name_key', $data['name_key'])->exists()) {
             $this->fail('name', 'This gate pass name is already in use. Enter a unique name.');
         }
         if (! empty($data['invoice_id'])) {
@@ -381,7 +428,7 @@ class TextileService
             'authorised_by' => 'required|string|max:120'])->validate();
         $data['name_key'] = mb_strtolower($data['name']);
         $existing = DB::table('gate_passes')->where('id', $data['id'])->first();
-        if (DB::table('gate_passes')->where('name_key', $data['name_key'])->where('id', '!=', $data['id'])->exists()) {
+        if (DB::table('gate_passes')->where('owner_id', $this->ownerId)->where('name_key', $data['name_key'])->where('id', '!=', $data['id'])->exists()) {
             $this->fail('name', 'This gate pass name is already in use. Enter a unique name.');
         }
         if (! empty($data['invoice_id'])) {
@@ -448,11 +495,14 @@ class TextileService
         $rules = ['id' => 'required|exists:customers,id', 'status' => 'required|in:Active,Inactive'];
         if (array_key_exists('name', $input)) {
             $input['phone'] = preg_replace('/[^0-9+]/', '', $input['phone'] ?? '');
-            $rules = [...$rules, 'name' => 'required|string|max:120', 'phone' => 'required|string|max:30|unique:customers,phone,'.$input['id'],
+            $rules = [...$rules, 'name' => 'required|string|max:120', 'phone' => 'required|string|max:30',
                 'email' => 'nullable|email|max:160', 'address' => 'nullable|string|max:500', 'tax_id' => 'nullable|string|max:80',
                 'opening_balance' => 'nullable|numeric|min:0|max:100000000'];
         }
         $data = Validator::make($input, $rules)->validate();
+        if (isset($data['phone']) && DB::table('customers')->where('owner_id', $this->ownerId)->where('phone', $data['phone'])->where('id', '!=', $data['id'])->exists()) {
+            $this->fail('phone', 'This phone number is already in use in your workspace.');
+        }
         if (array_key_exists('opening_balance', $data)) {
             $data['opening_balance'] = self::cents($data['opening_balance'] ?? 0);
         }
@@ -523,14 +573,24 @@ class TextileService
         return (int) $data['id'];
     }
 
-    public function snapshot(): array
+    public function snapshot(?int $ownerId = null): array
     {
-        $data = ['production' => app(ProductionReport::class)->records()];
+        $data = ['production' => $ownerId === null ? app(ProductionReport::class)->records() : []];
         foreach (['customers', 'accounts', 'account_types', 'invoices', 'receipts', 'employees', 'attendance', 'payrolls', 'expenses', 'fixed_expenses', 'gate_passes', 'transactions', 'audit_logs', 'units'] as $table) {
-            $data[$table] = DB::table($table)->orderByDesc('id')->get()->map(fn ($row) => (array) $row)->all();
+            $query = DB::table($table);
+            if ($ownerId !== null) {
+                $query->where('owner_id', $ownerId);
+            }
+            $data[$table] = $query->orderByDesc('id')->get()->map(fn ($row) => (array) $row)->all();
         }
-        $data['invoice_items'] = DB::table('invoice_items')->get()->map(fn ($r) => (array) $r)->all();
-        $data['allocations'] = DB::table('allocations')->get()->map(fn ($r) => (array) $r)->all();
+        $items = DB::table('invoice_items');
+        $allocations = DB::table('allocations');
+        if ($ownerId !== null) {
+            $items->where('owner_id', $ownerId);
+            $allocations->where('owner_id', $ownerId);
+        }
+        $data['invoice_items'] = $items->get()->map(fn ($r) => (array) $r)->all();
+        $data['allocations'] = $allocations->get()->map(fn ($r) => (array) $r)->all();
         foreach ($data['invoices'] as &$invoice) {
             $invoice['paid'] = collect($data['allocations'])->where('invoice_id', $invoice['id'])->sum('amount');
             $invoice['due'] = $invoice['status'] === 'Voided' ? 0 : $invoice['total'] - $invoice['paid'];

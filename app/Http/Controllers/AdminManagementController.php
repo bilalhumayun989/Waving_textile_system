@@ -70,7 +70,7 @@ class AdminManagementController extends Controller
 
     private function audit(Request $request, string $action, int $userId, array $details): void
     {
-        DB::table('audit_logs')->insert(['user_id' => $request->user()->id, 'action' => $action,
+        DB::table('audit_logs')->insert(['user_id' => $request->user()->id, 'owner_id' => $request->user()->id, 'action' => $action,
             'entity' => 'users', 'entity_id' => $userId, 'details' => json_encode($details),
             'created_at' => now(), 'updated_at' => now()]);
     }

@@ -395,5 +395,27 @@ class TextileWorkflowTest extends TestCase
             'modules' => ['dashboard', 'customers', 'employees', 'attendance', 'payrolls'],
         ])->assertRedirect();
         $this->assertTrue($admin->fresh()->canAccessModule('payrolls'));
+        config(['workspace.super_admin_names' => ['Super Owner']]);
+        $this->actingAs($admin->fresh())->get('/employees')->assertOk();
+    }
+
+    public function test_admins_see_only_their_workspace_data_and_cannot_link_other_admin_records(): void
+    {
+        config(['workspace.super_admin_names' => ['Super Owner']]);
+        User::factory()->create(['name' => 'Super Owner', 'role' => 'admin']);
+        $first = User::factory()->create(['name' => 'First Admin', 'role' => 'admin', 'modules' => ['dashboard', 'customers', 'invoices']]);
+        $second = User::factory()->create(['name' => 'Second Admin', 'role' => 'admin', 'modules' => ['dashboard', 'customers', 'invoices']]);
+
+        $this->service->post('customers', ['submission_key' => (string) Str::uuid(), 'name' => 'First Workspace Customer', 'phone' => '5550000011'], $first->id);
+        $foreignCustomer = $this->service->post('customers', ['submission_key' => (string) Str::uuid(), 'name' => 'Second Workspace Customer', 'phone' => '5550000011'], $second->id);
+
+        $this->actingAs($first)->get('/customers')->assertOk()->assertInertia(fn (AssertableInertia $page) => $page
+            ->where('data.customers.0.name', 'First Workspace Customer')->has('data.customers', 1));
+        $this->actingAs($second)->get('/customers')->assertOk()->assertInertia(fn (AssertableInertia $page) => $page
+            ->where('data.customers.0.name', 'Second Workspace Customer')->has('data.customers', 1));
+        $this->actingAs($first)->post('/actions/invoices', [
+            'submission_key' => (string) Str::uuid(), 'customer_id' => $foreignCustomer, 'date' => '2026-09-29',
+            'due_date' => '2026-10-01', 'items' => [['description' => 'Fabric', 'unit' => 'Meter', 'quantity' => 1, 'rate' => 10]],
+        ])->assertSessionHasErrors('customer_id');
     }
 }

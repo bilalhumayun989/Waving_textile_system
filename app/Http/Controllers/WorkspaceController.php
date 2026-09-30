@@ -20,7 +20,7 @@ class WorkspaceController extends Controller
         abort_unless(in_array($page, ['dashboard', 'customers', 'invoices', 'receipts', 'cashbook', 'employees', 'attendance', 'payrolls', 'expenses', 'fixed-expenses', 'gate-passes', 'reports', 'ledgers', 'settings']), 404);
         abort_unless($request->user()->canAccessModule($page), 403, 'Your admin has not enabled this module.');
         $tables = ['fixed-expenses' => 'fixed_expenses', 'gate-passes' => 'gate_passes', 'cashbook' => 'accounts'];
-        $data = $service->snapshot();
+        $data = $service->snapshot($request->user()->id);
         $data = $this->limitModuleData($data, $request->user()->accessibleModules());
         if ($id) {
             abort_unless(collect($data[$tables[$page] ?? $page] ?? [])->contains('id', (int) $id), 404);
