@@ -7,6 +7,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Validation\ValidationException;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -43,7 +44,9 @@ class AdminManagementController extends Controller
             'modules.*' => ['required', 'string', 'distinct', Rule::in($validModules)],
         ]);
         $reservedNames = array_map(fn (string $name): string => mb_strtolower(trim($name)), config('workspace.super_admin_names', []));
-        abort_if(in_array(mb_strtolower(trim($data['name'])), $reservedNames, true), 422, 'That name is reserved for a super administrator.');
+        if (in_array(mb_strtolower(trim($data['name'])), $reservedNames, true)) {
+            throw ValidationException::withMessages(['name' => 'That name is reserved for a super administrator. Choose another admin name.']);
+        }
 
         $admin = new User;
         $admin->forceFill(['name' => $data['name'], 'email' => $data['email'], 'password' => Hash::make($data['password']),

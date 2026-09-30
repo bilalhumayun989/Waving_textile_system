@@ -418,4 +418,22 @@ class TextileWorkflowTest extends TestCase
             'due_date' => '2026-10-01', 'items' => [['description' => 'Fabric', 'unit' => 'Meter', 'quantity' => 1, 'rate' => 10]],
         ])->assertSessionHasErrors('customer_id');
     }
+
+    public function test_super_admin_can_create_multiple_admin_accounts(): void
+    {
+        config(['workspace.super_admin_names' => ['Super Owner']]);
+        $owner = User::factory()->create(['name' => 'Super Owner', 'role' => 'admin']);
+        $this->actingAs($owner);
+
+        foreach ([['First Tenant', 'first-tenant@example.com'], ['Second Tenant', 'second-tenant@example.com']] as [$name, $email]) {
+            $this->post('/admin-management/users', [
+                'name' => $name, 'email' => $email, 'password' => 'SecurePassword123',
+                'modules' => ['dashboard', 'customers'],
+            ])->assertRedirect();
+        }
+
+        $this->assertDatabaseHas('users', ['email' => 'first-tenant@example.com', 'role' => 'admin']);
+        $this->assertDatabaseHas('users', ['email' => 'second-tenant@example.com', 'role' => 'admin']);
+        $this->get('/admin-management')->assertInertia(fn (AssertableInertia $page) => $page->has('data.admins', 3));
+    }
 }
