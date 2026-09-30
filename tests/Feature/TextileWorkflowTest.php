@@ -364,4 +364,36 @@ class TextileWorkflowTest extends TestCase
         $this->post('/logout')->assertRedirect('/login');
         $this->assertGuest();
     }
+
+    public function test_configured_super_admin_can_create_admins_and_restrict_direct_module_access(): void
+    {
+        config(['workspace.super_admin_names' => ['Super Owner']]);
+        $owner = User::factory()->create(['name' => 'Super Owner', 'role' => 'admin']);
+        $modules = ['dashboard', 'customers', 'reports'];
+
+        $this->actingAs($owner)->get('/admin-management')->assertOk()
+            ->assertInertia(fn (AssertableInertia $page) => $page->component('Workspace')->where('page', 'admin-management'));
+        $this->post('/admin-management/users', ['name' => 'Limited Admin', 'email' => 'limited@example.com',
+            'password' => 'SecurePassword123', 'modules' => $modules])->assertRedirect();
+        $admin = User::where('email', 'limited@example.com')->firstOrFail();
+        $this->assertSame('admin', $admin->role);
+        $this->assertSame($modules, $admin->modules);
+
+        $this->actingAs($admin)->get('/customers')->assertOk();
+        $this->get('/employees')->assertForbidden();
+        $this->post('/actions/employees', [])->assertForbidden();
+        $this->get('/admin-management')->assertForbidden();
+    }
+
+    public function test_super_admin_can_enable_more_modules_for_an_existing_admin(): void
+    {
+        config(['workspace.super_admin_names' => ['Super Owner']]);
+        $owner = User::factory()->create(['name' => 'Super Owner', 'role' => 'admin']);
+        $admin = User::factory()->create(['name' => 'Payroll Admin', 'role' => 'admin', 'modules' => ['dashboard', 'customers']]);
+
+        $this->actingAs($owner)->put('/admin-management/users/'.$admin->id.'/modules', [
+            'modules' => ['dashboard', 'customers', 'employees', 'attendance', 'payrolls'],
+        ])->assertRedirect();
+        $this->assertTrue($admin->fresh()->canAccessModule('payrolls'));
+    }
 }
