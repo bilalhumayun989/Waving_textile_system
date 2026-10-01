@@ -18,6 +18,6 @@ class HandleInertiaRequests extends Middleware
             'is_super_admin' => $user->isSuperAdmin(),
             'modules' => $user->accessibleModules(),
         ] : null],
-            'flash' => ['success' => fn () => $request->session()->get('success')]];
+            'flash' => ['success' => fn () => $request->session()->get('success'), 'error' => fn () => $request->session()->get('error')]];
     }
 }

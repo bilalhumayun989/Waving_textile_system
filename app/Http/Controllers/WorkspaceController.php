@@ -6,6 +6,7 @@ use App\Services\TextileService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -18,10 +19,13 @@ class WorkspaceController extends Controller
             return redirect('/'.($request->user()->accessibleModules()[0] ?? 'admin-management'));
         }
         abort_unless(in_array($page, ['dashboard', 'customers', 'invoices', 'costing', 'receipts', 'cashbook', 'employees', 'attendance', 'payrolls', 'expenses', 'fixed-expenses', 'gate-passes', 'reports', 'ledgers', 'settings']), 404);
-        abort_unless($request->user()->canAccessModule($page), 403, 'Your admin has not enabled this module.');
+        abort_unless($request->user()->canAccessModule($page), 403, 'You are not allowed to do that action. Your admin has not enabled this module.');
         $tables = ['fixed-expenses' => 'fixed_expenses', 'gate-passes' => 'gate_passes', 'cashbook' => 'accounts'];
         $data = $service->snapshot($request->user()->id);
         $data = $this->limitModuleData($data, $request->user()->accessibleModules());
+        if ($request->user()->canAccessModule('invoices') && $request->user()->canAccessModule('costing')) {
+            $data['units'] = DB::table('units')->where('owner_id', $request->user()->id)->orderBy('name')->get()->map(fn ($row) => (array) $row)->all();
+        }
         if ($id) {
             abort_unless(collect($data[$tables[$page] ?? $page] ?? [])->contains('id', (int) $id), 404);
         }
@@ -33,20 +37,16 @@ class WorkspaceController extends Controller
     public function store(Request $request, TextileService $service, string $action): RedirectResponse
     {
         $module = $this->actionModule($action);
-        abort_unless($module && $request->user()->canAccessModule($module), 403, 'Your admin has not enabled this module.');
-        if ($action === 'invoices' && $request->filled('costing_ids')) {
-            abort_unless($request->user()->canAccessModule('costing'), 403, 'Your admin has not enabled costing.');
-        }
+        abort_unless($module && $request->user()->canAccessModule($module), 403, 'You are not allowed to do that action. Your admin has not enabled this module.');
         if ($action === 'link-fabric-costing') {
-            abort_unless($request->user()->canAccessModule('costing'), 403, 'Your admin has not enabled costing.');
-            abort_unless($request->user()->canAccessModule('invoices'), 403, 'Your admin has not enabled invoices.');
+            abort_unless($request->user()->canAccessModule('invoices'), 403, 'You are not allowed to do that action. Your admin has not enabled invoices.');
         }
         $adminActions = ['payrolls', 'pay-salary', 'void-invoice', 'manual-entry', 'accounts', 'account-types', 'update-customer', 'delete-customer', 'update-employee', 'delete-employee', 'toggle-fixed', 'update-gate-pass', 'delete-gate-pass'];
         if (in_array($action, $adminActions)) {
-            abort_unless($request->user()->isAdmin(), 403);
+            abort_unless($request->user()->isAdmin(), 403, 'You are not allowed to do that action. Contact your administrator if you need access.');
         }
         if ($request->filled('date') && $request->date < today()->toDateString() && $action !== 'update-gate-pass') {
-            abort_unless($request->user()->isAdmin(), 403, 'Backdated entries require an administrator.');
+            abort_unless($request->user()->isAdmin(), 403, 'You are not allowed to do that action. Backdated entries require an administrator.');
         }
         $service->post($action, $request->except('_fixed_id'), $request->user()->id);
 
@@ -57,7 +57,7 @@ class WorkspaceController extends Controller
     {
         return match ($action) {
             'customers', 'update-customer', 'delete-customer' => 'customers',
-            'invoices', 'void-invoice' => 'invoices',
+            'invoices', 'void-invoice', 'units' => 'invoices',
             'fabric-costings', 'link-fabric-costing' => 'costing',
             'receipts' => 'receipts',
             'accounts', 'account-types', 'manual-entry' => 'cashbook',
