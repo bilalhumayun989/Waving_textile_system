@@ -19,7 +19,13 @@ class WorkspaceController extends Controller
             return redirect('/'.($request->user()->accessibleModules()[0] ?? 'admin-management'));
         }
         abort_unless(in_array($page, ['dashboard', 'customers', 'invoices', 'costing', 'receipts', 'cashbook', 'employees', 'attendance', 'payrolls', 'expenses', 'fixed-expenses', 'gate-passes', 'reports', 'ledgers', 'settings']), 404);
-        abort_unless($request->user()->canAccessModule($page), 403, 'You are not allowed to do that action. Your admin has not enabled this module.');
+        if (! $request->user()->canAccessModule($page)) {
+            if ($request->header('X-Inertia')) {
+                return redirect('/')->with('error', 'You are not allowed to open '.$this->moduleLabel($page).'. Ask your super admin to enable it for your account.');
+            }
+
+            abort(403, 'You are not allowed to open '.$this->moduleLabel($page).'. Ask your super admin to enable it for your account.');
+        }
         $tables = ['fixed-expenses' => 'fixed_expenses', 'gate-passes' => 'gate_passes', 'cashbook' => 'accounts'];
         $data = $service->snapshot($request->user()->id);
         $data = $this->limitModuleData($data, $request->user()->accessibleModules());
@@ -70,6 +76,11 @@ class WorkspaceController extends Controller
             'gate-passes', 'update-gate-pass', 'delete-gate-pass' => 'gate-passes',
             default => null,
         };
+    }
+
+    private function moduleLabel(string $module): string
+    {
+        return config('workspace.modules.'.$module, str_replace('-', ' ', $module));
     }
 
     private function limitModuleData(array $data, array $modules): array

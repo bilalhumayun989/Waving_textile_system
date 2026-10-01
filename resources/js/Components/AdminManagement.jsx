@@ -15,7 +15,7 @@ export default function AdminManagement({data}) {
 }
 
 function ModulePicker({modules,selected,toggle}) {
- return <div className="module-picker"><div className="section-label">Module access <span>{selected.length} enabled</span></div><div className="module-toggle-grid">{Object.entries(modules).map(([key,label])=><label className="module-toggle" key={key}><input type="checkbox" checked={selected.includes(key)} onChange={()=>toggle(key)}/><span>{label}</span></label>)}</div><small>Employees, attendance, and payroll start disabled. Enable them when this admin needs HR access.</small></div>;
+ return <div className="module-picker"><div className="section-label">Module access <span>{selected.length} enabled</span></div><div className="module-toggle-grid">{Object.entries(modules).map(([key,label])=><label className="module-toggle" key={key}><input type="checkbox" checked={selected.includes(key)} onChange={()=>toggle(key)}/><span>{label}</span></label>)}</div><small>Keep Dashboard enabled for the default landing page. Employees, attendance, and payroll start disabled.</small></div>;
 }
 
 function AdminAccessCard({admin,modules}) {

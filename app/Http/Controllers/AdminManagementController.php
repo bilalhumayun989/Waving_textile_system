@@ -66,7 +66,11 @@ class AdminManagementController extends Controller
             'modules' => 'required|array|min:1',
             'modules.*' => ['required', 'string', 'distinct', Rule::in($validModules)],
         ]);
-        $user->forceFill(['modules' => array_values(array_unique($data['modules']))])->save();
+        $modules = array_values(array_unique($data['modules']));
+        if ($user->id === $request->user()->id) {
+            $modules = array_values(array_unique([...$modules, 'dashboard', 'costing', 'settings']));
+        }
+        $user->forceFill(['modules' => $modules])->save();
         $this->audit($request, 'update-admin-modules', $user->id, ['modules' => $user->modules]);
 
         return back()->with('success', 'Module access updated.');
