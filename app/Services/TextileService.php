@@ -203,10 +203,10 @@ class TextileService
         $result = FabricCosting::calculate($data);
         $persist = collect($result)->except(['fabric_rate_per_mtr', 'contract_value', 'conv_value', 'yarn_value', 'sales_tax_amount', 'warp_amount_per_mtr', 'weft_amount_per_mtr', 'conversion_per_mtr'])->all();
         $persist['fabric_rate_per_mtr'] = self::cents($result['fabric_rate_per_mtr']);
-        $persist['contract_value'] = self::cents($result['cont_value']);
+        $persist['contract_value'] = self::cents($result['contract_value']);
         $persist['conv_value'] = self::cents($result['conv_value']);
         $persist['yarn_value'] = self::cents($result['yarn_value']);
-        $persist['sales_tax_amount'] = self::cents($result['sale_tax_amount']);
+        $persist['sales_tax_amount'] = self::cents($result['sales_tax_amount']);
         $persist['warp_amount_per_mtr'] = self::cents($result['warp_amount_per_mtr']);
         $persist['weft_amount_per_mtr'] = self::cents($result['weft_amount_per_mtr']);
         $persist['conversion_per_mtr'] = self::cents($result['conversion_per_mtr']);
