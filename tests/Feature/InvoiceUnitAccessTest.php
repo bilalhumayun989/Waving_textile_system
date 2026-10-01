@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Inertia\Testing\AssertableInertia;
 use Tests\TestCase;
@@ -34,6 +35,25 @@ class InvoiceUnitAccessTest extends TestCase
         ])->assertRedirect();
 
         $this->assertDatabaseHas('fabric_costings', ['owner_id' => $admin->id, 'name' => 'Plain cotton']);
+    }
+
+    public function test_saved_costing_name_route_opens_its_calculation_details(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin', 'modules' => ['dashboard', 'costing']]);
+
+        $this->actingAs($admin)->post('/actions/fabric-costings', [
+            'submission_key' => (string) Str::uuid(), 'name' => 'Plain cotton', 'quantity' => 1000,
+            'read' => 60, 'pick' => 40, 'warp_count' => 40, 'weft_count' => 40, 'width' => 44,
+            'yarn_warp_rate' => 250, 'yarn_weft_rate' => 240, 'conversion_rate' => 0.02,
+        ])->assertRedirect();
+
+        $costingId = (int) DB::table('fabric_costings')->where('owner_id', $admin->id)->value('id');
+
+        $this->actingAs($admin)->get('/costing/'.$costingId)->assertOk()
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->where('page', 'costing')
+                ->where('recordId', $costingId)
+                ->where('data.fabric_costings.0.name', 'Plain cotton'));
     }
 
     public function test_disabled_module_access_returns_forbidden_with_a_readable_message(): void

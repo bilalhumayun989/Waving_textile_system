@@ -26,7 +26,7 @@ class WorkspaceController extends Controller
 
             abort(403, 'You are not allowed to open '.$this->moduleLabel($page).'. Ask your super admin to enable it for your account.');
         }
-        $tables = ['fixed-expenses' => 'fixed_expenses', 'gate-passes' => 'gate_passes', 'cashbook' => 'accounts'];
+        $tables = ['fixed-expenses' => 'fixed_expenses', 'gate-passes' => 'gate_passes', 'cashbook' => 'accounts', 'costing' => 'fabric_costings'];
         $data = $service->snapshot($request->user()->id);
         $data = $this->limitModuleData($data, $request->user()->accessibleModules());
         if ($request->user()->canAccessModule('invoices') && $request->user()->canAccessModule('costing')) {
