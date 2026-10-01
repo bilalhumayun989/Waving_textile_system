@@ -24,6 +24,17 @@ class InvoiceUnitAccessTest extends TestCase
         $this->assertDatabaseHas('units', ['owner_id' => $admin->id, 'name' => 'Guize', 'meters_per_unit' => 4.5]);
     }
 
+    public function test_super_admin_role_can_log_in_and_open_admin_management(): void
+    {
+        User::factory()->create([
+            'name' => 'Bilal Humayun', 'email' => 'bilal.humayun@gmail.com', 'password' => '12345678', 'role' => 'super_admin',
+        ]);
+
+        $this->post('/login', ['email' => 'bilal.humayun@gmail.com', 'password' => '12345678'])->assertRedirect('/');
+        $this->get('/admin-management')->assertOk()
+            ->assertInertia(fn (AssertableInertia $page) => $page->where('page', 'admin-management'));
+    }
+
     public function test_enabled_costing_action_can_be_submitted_from_the_costing_page(): void
     {
         $admin = User::factory()->create(['role' => 'admin', 'modules' => ['dashboard', 'costing']]);

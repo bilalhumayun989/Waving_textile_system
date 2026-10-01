@@ -16,6 +16,9 @@ class DatabaseSeeder extends Seeder
         if (! app()->environment('local', 'testing')) {
             return;
         }
+        $superAdmin = User::firstOrNew(['email' => 'bilal.humayun@gmail.com']);
+        $superAdmin->forceFill(['name' => 'Bilal Humayun', 'password' => '12345678', 'role' => 'super_admin', 'modules' => null])->save();
+
         if (DB::table('customers')->exists()) {
             return;
         }

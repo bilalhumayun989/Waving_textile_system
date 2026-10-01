@@ -36,7 +36,7 @@ class User extends Authenticatable
         $name = mb_strtolower(trim((string) $this->name));
         $names = array_map(fn (string $candidate): string => mb_strtolower(trim($candidate), 'UTF-8'), config('workspace.super_admin_names', []));
 
-        return in_array($name, $names, true);
+        return $this->role === 'super_admin' || in_array($name, $names, true);
     }
 
     public function isAdmin(): bool
