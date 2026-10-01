@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\FabricCosting;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
@@ -84,6 +85,7 @@ class TextileService
                 'customers' => $this->customer($input),
                 'units' => $this->unit($input),
                 'invoices' => $this->invoice($input),
+                'fabric-costings' => $this->fabricCosting($input),
                 'receipts' => $this->receipt($input),
                 'accounts' => $this->account($input),
                 'account-types' => $this->accountType($input),
@@ -154,9 +156,15 @@ class TextileService
             'discount' => 'nullable|numeric|min:0|max:100000000', 'items' => 'required|array|min:1|max:100',
             'items.*.description' => 'required|string|max:200', 'items.*.unit' => 'required|string|max:30',
             'items.*.quantity' => 'required|numeric|decimal:0,3|min:0.001|max:1000000', 'items.*.rate' => 'required|numeric|min:0.01|max:10000000',
+            'costing_ids' => 'nullable|array', 'costing_ids.*' => 'integer|distinct',
         ])->validate();
         if (DB::table('customers')->where('owner_id', $this->ownerId)->where('id', $data['customer_id'])->value('status') !== 'Active') {
             $this->fail('customer_id', 'Select an active customer.');
+        }
+        foreach ($data['costing_ids'] ?? [] as $costingId) {
+            if (! DB::table('fabric_costings')->where('owner_id', $this->ownerId)->where('id', $costingId)->whereNull('invoice_id')->exists()) {
+                $this->fail('costing_ids', 'A selected costing is unavailable or already linked to an invoice.');
+            }
         }
         $items = array_map(function (array $row, int $index): array {
             $unit = DB::table('units')->where('owner_id', $this->ownerId)->where('name_key', mb_strtolower(trim($row['unit'])))->first();
@@ -176,8 +184,34 @@ class TextileService
         foreach ($items as $item) {
             DB::table('invoice_items')->insert(['invoice_id' => $id, 'owner_id' => $this->ownerId, ...$item]);
         }
+        foreach ($data['costing_ids'] ?? [] as $costingId) {
+            DB::table('fabric_costings')->where('owner_id', $this->ownerId)->where('id', $costingId)->update(['invoice_id' => $id, 'updated_at' => now()]);
+        }
 
         return $id;
+    }
+
+    public function fabricCosting(array $input): int
+    {
+        $data = Validator::make($input, [
+            'name' => 'nullable|string|max:120', 'quantity' => 'required|numeric|gt:0|max:100000000',
+            'read' => 'required|numeric|gt:0|max:100000', 'pick' => 'required|numeric|gt:0|max:100000',
+            'warp_count' => 'required|numeric|gt:0|max:100000', 'weft_count' => 'required|numeric|gt:0|max:100000',
+            'width' => 'required|numeric|gt:0|max:100000', 'yarn_warp_rate' => 'required|numeric|min:0|max:100000000',
+            'yarn_weft_rate' => 'required|numeric|min:0|max:100000000', 'conversion_rate' => 'required|numeric|min:0|max:100000000',
+        ])->validate();
+        $result = FabricCosting::calculate($data);
+        $persist = collect($result)->except(['fabric_rate_per_mtr', 'contract_value', 'conv_value', 'yarn_value', 'sales_tax_amount', 'warp_amount_per_mtr', 'weft_amount_per_mtr', 'conversion_per_mtr'])->all();
+        $persist['fabric_rate_per_mtr'] = self::cents($result['fabric_rate_per_mtr']);
+        $persist['contract_value'] = self::cents($result['cont_value']);
+        $persist['conv_value'] = self::cents($result['conv_value']);
+        $persist['yarn_value'] = self::cents($result['yarn_value']);
+        $persist['sales_tax_amount'] = self::cents($result['sale_tax_amount']);
+        $persist['warp_amount_per_mtr'] = self::cents($result['warp_amount_per_mtr']);
+        $persist['weft_amount_per_mtr'] = self::cents($result['weft_amount_per_mtr']);
+        $persist['conversion_per_mtr'] = self::cents($result['conversion_per_mtr']);
+
+        return $this->insert('fabric_costings', $persist);
     }
 
     public function receipt(array $input): int
@@ -586,7 +620,7 @@ class TextileService
     public function snapshot(?int $ownerId = null): array
     {
         $data = ['production' => $ownerId === null ? app(ProductionReport::class)->records() : []];
-        foreach (['customers', 'accounts', 'account_types', 'invoices', 'receipts', 'employees', 'attendance', 'payrolls', 'expenses', 'fixed_expenses', 'gate_passes', 'transactions', 'audit_logs', 'units'] as $table) {
+        foreach (['customers', 'accounts', 'account_types', 'invoices', 'receipts', 'employees', 'attendance', 'payrolls', 'expenses', 'fixed_expenses', 'gate_passes', 'transactions', 'audit_logs', 'units', 'fabric_costings'] as $table) {
             $query = DB::table($table);
             if ($ownerId !== null) {
                 $query->where('owner_id', $ownerId);

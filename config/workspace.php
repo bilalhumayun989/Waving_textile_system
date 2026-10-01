@@ -5,6 +5,7 @@ return [
         'dashboard' => 'Overview',
         'customers' => 'Customers',
         'invoices' => 'Invoices',
+        'costing' => 'Fabric costing',
         'receipts' => 'Receive money',
         'cashbook' => 'Cash & bank',
         'employees' => 'Employees',

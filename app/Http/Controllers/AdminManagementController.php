@@ -7,8 +7,8 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Validation\ValidationException;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -20,13 +20,13 @@ class AdminManagementController extends Controller
 
         return Inertia::render('Workspace', [
             'page' => 'admin-management', 'recordId' => null,
-            'data' => ['customers' => [], 'invoices' => [], 'receipts' => [], 'employees' => [], 'fixed_expenses' => [],
+            'data' => ['customers' => [], 'invoices' => [], 'receipts' => [], 'employees' => [], 'fixed_expenses' => [], 'fabric_costings' => [],
                 'expenses' => [], 'payrolls' => [], 'attendance' => [], 'accounts' => [], 'transactions' => [],
                 'audit_logs' => [], 'gate_passes' => [], 'invoice_items' => [], 'allocations' => [], 'units' => [], 'production' => [],
                 'admins' => User::where('role', 'admin')->orderBy('name')->get()
-                ->reject(fn (User $user): bool => $user->isSuperAdmin())
-                ->map(fn (User $user): array => ['id' => $user->id, 'name' => $user->name, 'email' => $user->email,
-                    'modules' => $user->modules ?? array_keys(config('workspace.modules'))])->values(),
+                    ->reject(fn (User $user): bool => $user->isSuperAdmin())
+                    ->map(fn (User $user): array => ['id' => $user->id, 'name' => $user->name, 'email' => $user->email,
+                        'modules' => $user->modules ?? array_keys(config('workspace.modules'))])->values(),
                 'module_options' => config('workspace.modules'),
                 'reserved_names' => config('workspace.super_admin_names', [])],
             'today' => today()->toDateString(), 'demo' => config('app.demo', false),

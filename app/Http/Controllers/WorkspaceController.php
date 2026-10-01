@@ -17,7 +17,7 @@ class WorkspaceController extends Controller
         if ($page === 'dashboard' && ! $request->user()->canAccessModule('dashboard')) {
             return redirect('/'.($request->user()->accessibleModules()[0] ?? 'admin-management'));
         }
-        abort_unless(in_array($page, ['dashboard', 'customers', 'invoices', 'receipts', 'cashbook', 'employees', 'attendance', 'payrolls', 'expenses', 'fixed-expenses', 'gate-passes', 'reports', 'ledgers', 'settings']), 404);
+        abort_unless(in_array($page, ['dashboard', 'customers', 'invoices', 'costing', 'receipts', 'cashbook', 'employees', 'attendance', 'payrolls', 'expenses', 'fixed-expenses', 'gate-passes', 'reports', 'ledgers', 'settings']), 404);
         abort_unless($request->user()->canAccessModule($page), 403, 'Your admin has not enabled this module.');
         $tables = ['fixed-expenses' => 'fixed_expenses', 'gate-passes' => 'gate_passes', 'cashbook' => 'accounts'];
         $data = $service->snapshot($request->user()->id);
@@ -51,6 +51,7 @@ class WorkspaceController extends Controller
         return match ($action) {
             'customers', 'update-customer', 'delete-customer' => 'customers',
             'invoices', 'void-invoice' => 'invoices',
+            'fabric-costings' => 'costing',
             'receipts' => 'receipts',
             'accounts', 'account-types', 'manual-entry' => 'cashbook',
             'employees', 'update-employee', 'delete-employee' => 'employees',
@@ -70,6 +71,7 @@ class WorkspaceController extends Controller
         foreach ([
             'customers' => $has('customers', 'invoices', 'receipts', 'gate-passes', 'ledgers'),
             'invoices' => $has('invoices', 'receipts', 'gate-passes', 'ledgers'),
+            'fabric_costings' => $has('costing', 'invoices'),
             'invoice_items' => $has('invoices', 'gate-passes', 'ledgers'),
             'receipts' => $has('receipts', 'ledgers'),
             'allocations' => $has('invoices', 'receipts', 'ledgers'),
