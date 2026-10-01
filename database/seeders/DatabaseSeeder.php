@@ -46,7 +46,7 @@ class DatabaseSeeder extends Seeder
                     'items' => [['description' => $fabrics[$i % 6], 'quantity' => $qty, 'unit' => $i % 3 === 0 ? 'Roll' : 'Meter', 'rate' => $rate]]]);
                 if ($i % 4 !== 0) {
                     $post('receipts', ['customer_id' => $customers[$i % 8], 'account_id' => $i % 3 === 0 ? $cash : $bank,
-                        'date' => $date, 'amount' => $qty * $rate * ($i % 3 === 0 ? 0.5 : 1), 'method' => 'Bank transfer',
+                        'date' => $date, 'amount' => $qty * $rate * ($i % 3 === 0 ? 0.5 : 1), 'method' => $i % 3 === 0 ? 'Cash' : 'Bank transfer',
                         'reference' => 'DEMO-TXN-'.($i + 1), 'allocation_mode' => 'manual',
                         'allocations' => [['invoice_id' => $invoice, 'amount' => $qty * $rate * ($i % 3 === 0 ? 0.5 : 1)]]]);
                 }

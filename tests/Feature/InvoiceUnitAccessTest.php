@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\User;
+use Database\Seeders\DatabaseSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -33,6 +34,18 @@ class InvoiceUnitAccessTest extends TestCase
         $this->post('/login', ['email' => 'bilal.humayun@gmail.com', 'password' => '12345678'])->assertRedirect('/');
         $this->get('/admin-management')->assertOk()
             ->assertInertia(fn (AssertableInertia $page) => $page->where('page', 'admin-management'));
+    }
+
+    public function test_demo_seeder_uses_a_payment_method_matching_each_receiving_account(): void
+    {
+        $this->seed(DatabaseSeeder::class);
+
+        $mismatchedReceipts = DB::table('receipts')
+            ->join('accounts', 'accounts.id', '=', 'receipts.account_id')
+            ->whereRaw("(lower(accounts.type) = 'cash' and receipts.method <> 'Cash') or (lower(accounts.type) = 'bank' and receipts.method not in ('Bank transfer', 'Cheque', 'Card', 'Other'))")
+            ->count();
+
+        $this->assertSame(0, $mismatchedReceipts);
     }
 
     public function test_enabled_costing_action_can_be_submitted_from_the_costing_page(): void
