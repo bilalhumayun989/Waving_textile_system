@@ -85,7 +85,7 @@ class TextileService
                 'customers' => $this->customer($input),
                 'units' => $this->unit($input),
                 'invoices' => $this->invoice($input),
-                'fabric-costings' => $this->fabricCosting($input),
+                'costing', 'fabric-costings' => $this->fabricCosting($input),
                 'link-fabric-costing' => $this->linkFabricCosting($input),
                 'receipts' => $this->receipt($input),
                 'accounts' => $this->account($input),

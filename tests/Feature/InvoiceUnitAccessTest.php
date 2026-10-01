@@ -23,6 +23,19 @@ class InvoiceUnitAccessTest extends TestCase
         $this->assertDatabaseHas('units', ['owner_id' => $admin->id, 'name' => 'Guize', 'meters_per_unit' => 4.5]);
     }
 
+    public function test_enabled_costing_action_can_be_submitted_from_the_costing_page(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin', 'modules' => ['dashboard', 'costing']]);
+
+        $this->actingAs($admin)->post('/actions/fabric-costings', [
+            'submission_key' => (string) Str::uuid(), 'name' => 'Plain cotton', 'quantity' => 1000,
+            'read' => 60, 'pick' => 40, 'warp_count' => 40, 'weft_count' => 40, 'width' => 44,
+            'yarn_warp_rate' => 250, 'yarn_weft_rate' => 240, 'conversion_rate' => 0.02,
+        ])->assertRedirect();
+
+        $this->assertDatabaseHas('fabric_costings', ['owner_id' => $admin->id, 'name' => 'Plain cotton']);
+    }
+
     public function test_disabled_module_access_returns_forbidden_with_a_readable_message(): void
     {
         $admin = User::factory()->create(['role' => 'admin', 'modules' => ['dashboard']]);

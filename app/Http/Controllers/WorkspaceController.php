@@ -64,7 +64,7 @@ class WorkspaceController extends Controller
         return match ($action) {
             'customers', 'update-customer', 'delete-customer' => 'customers',
             'invoices', 'void-invoice', 'units' => 'invoices',
-            'fabric-costings', 'link-fabric-costing' => 'costing',
+            'costing', 'fabric-costings', 'link-fabric-costing' => 'costing',
             'receipts' => 'receipts',
             'accounts', 'account-types', 'manual-entry' => 'cashbook',
             'employees', 'update-employee', 'delete-employee' => 'employees',
