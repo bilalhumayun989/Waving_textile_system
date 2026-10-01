@@ -1,11 +1,11 @@
 import React, {useState,useEffect} from 'react';
 import {useForm} from '@inertiajs/react';
 import {Plus, Trash2, ArrowRight, Info, Check} from 'lucide-react';
-import {Field, Modal, money, code, sum} from './UI';
+import {Field, Modal, money, code, sum, submissionKey} from './UI';
 const titles={'customers':'Add customer','update-customer':'Edit customer','delete-customer':'Delete customer','invoices':'Create invoice','costing':'Calculate fabric cost','fabric-costings':'Calculate fabric cost','link-fabric-costing':'Link costing to invoice','receipts':'Receive money','employees':'Add employee','update-employee':'Edit employee','delete-employee':'Delete employee','attendance':'Mark attendance','payrolls':'Generate payroll','pay-salary':'Pay salary','expenses':'Record expense','fixed-expenses':'New recurring expense','pay-fixed':'Pay recurring expense','defer-fixed':'Defer recurring expense','gate-passes':'Create gate pass','update-gate-pass':'Edit gate pass','delete-gate-pass':'Delete gate pass','accounts':'Add account','manual-entry':'Manual cash entry','void-invoice':'Void invoice'};
 export default function TransactionForm({action,data,today,initial={},modules=[],onClose,onSaved}) {
  const [inline,setInline]=useState(false); const [unitCreator,setUnitCreator]=useState(false); const [accountTypeCreator,setAccountTypeCreator]=useState(false);
- const defaults={submission_key:crypto.randomUUID(),date:today,due_date:today,joining_date:today,next_due:today,
+ const defaults={submission_key:submissionKey(),date:today,due_date:today,joining_date:today,next_due:today,
  name:'',phone:'',email:'',address:'',tax_id:'',customer_id:'',account_id:'',employee_id:'',invoice_id:'',
  amount:'',salary:'',description:'',category:'',notes:'',reference:'',method:action==='receipts'?'':'Bank transfer',allocation_mode:'oldest',allocations:[],
  type:action==='accounts'?'Bank':action==='manual-entry'?'out':'Outward',opening_balance:0,salary_type:'Monthly',period:today.slice(0,7),
@@ -73,14 +73,14 @@ export default function TransactionForm({action,data,today,initial={},modules=[]
 }
 
 function AccountTypeCreator({onClose,onCreated}) {
- const form=useForm({submission_key:crypto.randomUUID(),name:''});
+ const form=useForm({submission_key:submissionKey(),name:''});
  const submit=e=>{e.preventDefault();form.post('/actions/account-types',{preserveScroll:true,onSuccess:page=>onCreated(page.props.data.account_types[0])})};
 
  return <Modal title="Add account type" onClose={onClose}><form onSubmit={submit}><div className="modal-body"><Field label="Account type name" error={form.errors.name}><input autoFocus required maxLength={60} placeholder="e.g. Savings" value={form.data.name} onChange={e=>form.setData('name',e.target.value)}/></Field>{Object.keys(form.errors).length>0&&<div className="form-errors" role="alert">{Object.entries(form.errors).map(([key,error])=><p key={key}>{error}</p>)}</div>}</div><div className="modal-footer"><button type="button" className="button secondary" onClick={onClose}>Cancel</button><button className="button primary" disabled={form.processing}>{form.processing?'Saving…':'Save type'}<ArrowRight size={16}/></button></div></form></Modal>;
 }
 
 function UnitCreator({onClose,onCreated}) {
- const form=useForm({submission_key:crypto.randomUUID(),name:'',meters_per_unit:''});
+ const form=useForm({submission_key:submissionKey(),name:'',meters_per_unit:''});
  const submit=e=>{e.preventDefault();form.post('/actions/units',{preserveScroll:true,onSuccess:page=>onCreated(page.props.data.units?.find(unit=>unit.name_key===form.data.name.trim().toLowerCase()))})};
 
  return <Modal title="Add a reusable length unit" onClose={onClose}><form onSubmit={submit}><div className="modal-body"><div className="form-grid">

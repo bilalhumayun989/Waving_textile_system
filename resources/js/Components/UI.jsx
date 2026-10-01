@@ -2,6 +2,14 @@ import React, { useState } from 'react';
 import { Link } from '@inertiajs/react';
 import { ArrowUpRight, ChevronLeft, ChevronRight, Search, Inbox, X, Plus } from 'lucide-react';
 export const money = value => new Intl.NumberFormat('en-US', {style:'currency', currency:'USD', maximumFractionDigits:2}).format((Number(value)||0)/100);
+export function submissionKey(){
+ if(typeof globalThis.crypto?.randomUUID==='function')return globalThis.crypto.randomUUID();
+ const bytes=new Uint8Array(16);
+ if(typeof globalThis.crypto?.getRandomValues==='function')globalThis.crypto.getRandomValues(bytes);else bytes.forEach((_,index)=>{bytes[index]=Math.floor(Math.random()*256)});
+ bytes[6]=(bytes[6]&0x0f)|0x40;bytes[8]=(bytes[8]&0x3f)|0x80;
+ const hex=Array.from(bytes,value=>value.toString(16).padStart(2,'0')).join('');
+ return `${hex.slice(0,8)}-${hex.slice(8,12)}-${hex.slice(12,16)}-${hex.slice(16,20)}-${hex.slice(20)}`;
+}
 export const shortMoney = value => '$' + new Intl.NumberFormat('en-US', {notation:'compact', maximumFractionDigits:1}).format((Number(value)||0)/100);
 export const dateLabel = value => value ? new Date(value.slice(0,10)+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}) : '\u2014';
 export const code = (type,id) => ({customers:'CUS',invoices:'INV',receipts:'RCV',employees:'EMP',payrolls:'PAY',expenses:'EXP','gate-passes':'GP',transactions:'TXN','fixed-expenses':'FIX',accounts:'ACC'}[type] || 'REF')+'-'+String(id).padStart(4,'0');
