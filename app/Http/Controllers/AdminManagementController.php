@@ -49,10 +49,12 @@ class AdminManagementController extends Controller
             throw ValidationException::withMessages(['name' => 'That name is reserved for a super administrator. Choose another admin name.']);
         }
 
-        $admin = new User;
-        $admin->forceFill(['name' => $data['name'], 'email' => $data['email'], 'password' => Hash::make($data['password']),
-            'role' => 'admin', 'modules' => array_values(array_unique($data['modules']))])->save();
-        $this->audit($request, 'create-admin', $admin->id, ['name' => $admin->name, 'email' => $admin->email, 'modules' => $admin->modules]);
+        DB::transaction(function () use ($request, $data): void {
+            $admin = new User;
+            $admin->forceFill(['name' => $data['name'], 'email' => $data['email'], 'password' => Hash::make($data['password']),
+                'role' => 'admin', 'modules' => array_values(array_unique($data['modules']))])->save();
+            $this->audit($request, 'create-admin', $admin->id, ['name' => $admin->name, 'email' => $admin->email, 'modules' => $admin->modules]);
+        });
 
         return back()->with('success', 'Admin created with the selected module access.');
     }

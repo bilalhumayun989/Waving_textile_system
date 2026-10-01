@@ -34,6 +34,14 @@ class InvoiceUnitAccessTest extends TestCase
         $this->post('/login', ['email' => 'bilal.humayun@gmail.com', 'password' => '12345678'])->assertRedirect('/');
         $this->get('/admin-management')->assertOk()
             ->assertInertia(fn (AssertableInertia $page) => $page->where('page', 'admin-management'));
+
+        $this->post('/admin-management/users', [
+            'name' => 'New Workspace Admin', 'email' => 'new-admin@example.com', 'password' => 'SecurePassword123',
+            'modules' => ['dashboard', 'invoices'],
+        ])->assertRedirect();
+
+        $this->assertDatabaseHas('users', ['name' => 'New Workspace Admin', 'email' => 'new-admin@example.com', 'role' => 'admin']);
+        $this->get('/admin-management')->assertInertia(fn (AssertableInertia $page) => $page->where('data.admins.0.email', 'new-admin@example.com'));
     }
 
     public function test_demo_seeder_uses_a_payment_method_matching_each_receiving_account(): void
