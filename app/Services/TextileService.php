@@ -86,6 +86,7 @@ class TextileService
                 'units' => $this->unit($input),
                 'invoices' => $this->invoice($input),
                 'fabric-costings' => $this->fabricCosting($input),
+                'link-fabric-costing' => $this->linkFabricCosting($input),
                 'receipts' => $this->receipt($input),
                 'accounts' => $this->account($input),
                 'account-types' => $this->accountType($input),
@@ -161,9 +162,11 @@ class TextileService
         if (DB::table('customers')->where('owner_id', $this->ownerId)->where('id', $data['customer_id'])->value('status') !== 'Active') {
             $this->fail('customer_id', 'Select an active customer.');
         }
-        foreach ($data['costing_ids'] ?? [] as $costingId) {
-            if (! DB::table('fabric_costings')->where('owner_id', $this->ownerId)->where('id', $costingId)->whereNull('invoice_id')->exists()) {
-                $this->fail('costing_ids', 'A selected costing is unavailable or already linked to an invoice.');
+        if (! empty($data['costing_ids'])) {
+            foreach ($data['costing_ids'] as $costingId) {
+                if (! DB::table('fabric_costings')->where('owner_id', $this->ownerId)->where('id', $costingId)->whereNull('invoice_id')->exists()) {
+                    $this->fail('costing_ids', 'A selected costing is unavailable or already linked to an invoice.');
+                }
             }
         }
         $items = array_map(function (array $row, int $index): array {
@@ -184,8 +187,10 @@ class TextileService
         foreach ($items as $item) {
             DB::table('invoice_items')->insert(['invoice_id' => $id, 'owner_id' => $this->ownerId, ...$item]);
         }
-        foreach ($data['costing_ids'] ?? [] as $costingId) {
-            DB::table('fabric_costings')->where('owner_id', $this->ownerId)->where('id', $costingId)->update(['invoice_id' => $id, 'updated_at' => now()]);
+        if (! empty($data['costing_ids'])) {
+            foreach ($data['costing_ids'] as $costingId) {
+                DB::table('fabric_costings')->where('owner_id', $this->ownerId)->where('id', $costingId)->update(['invoice_id' => $id, 'updated_at' => now()]);
+            }
         }
 
         return $id;
@@ -212,6 +217,24 @@ class TextileService
         $persist['conversion_per_mtr'] = self::cents($result['conversion_per_mtr']);
 
         return $this->insert('fabric_costings', $persist);
+    }
+
+    public function linkFabricCosting(array $input): int
+    {
+        $data = Validator::make($input, [
+            'costing_id' => 'required|integer', 'invoice_id' => 'nullable|integer',
+        ])->validate();
+        $costing = DB::table('fabric_costings')->where('owner_id', $this->ownerId)->where('id', $data['costing_id'])->first();
+        if (! $costing) {
+            $this->fail('costing_id', 'That costing is not available in your workspace.');
+        }
+        $invoiceId = $data['invoice_id'] ?? null;
+        if ($invoiceId && ! DB::table('invoices')->where('owner_id', $this->ownerId)->where('id', $invoiceId)->where('status', 'Posted')->exists()) {
+            $this->fail('invoice_id', 'Select a posted invoice from your workspace.');
+        }
+        DB::table('fabric_costings')->where('id', $costing->id)->update(['invoice_id' => $invoiceId, 'updated_at' => now()]);
+
+        return (int) $costing->id;
     }
 
     public function receipt(array $input): int

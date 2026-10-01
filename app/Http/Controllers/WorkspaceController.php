@@ -34,6 +34,13 @@ class WorkspaceController extends Controller
     {
         $module = $this->actionModule($action);
         abort_unless($module && $request->user()->canAccessModule($module), 403, 'Your admin has not enabled this module.');
+        if ($action === 'invoices' && $request->filled('costing_ids')) {
+            abort_unless($request->user()->canAccessModule('costing'), 403, 'Your admin has not enabled costing.');
+        }
+        if ($action === 'link-fabric-costing') {
+            abort_unless($request->user()->canAccessModule('costing'), 403, 'Your admin has not enabled costing.');
+            abort_unless($request->user()->canAccessModule('invoices'), 403, 'Your admin has not enabled invoices.');
+        }
         $adminActions = ['payrolls', 'pay-salary', 'void-invoice', 'manual-entry', 'accounts', 'account-types', 'update-customer', 'delete-customer', 'update-employee', 'delete-employee', 'toggle-fixed', 'update-gate-pass', 'delete-gate-pass'];
         if (in_array($action, $adminActions)) {
             abort_unless($request->user()->isAdmin(), 403);
@@ -51,7 +58,7 @@ class WorkspaceController extends Controller
         return match ($action) {
             'customers', 'update-customer', 'delete-customer' => 'customers',
             'invoices', 'void-invoice' => 'invoices',
-            'fabric-costings' => 'costing',
+            'fabric-costings', 'link-fabric-costing' => 'costing',
             'receipts' => 'receipts',
             'accounts', 'account-types', 'manual-entry' => 'cashbook',
             'employees', 'update-employee', 'delete-employee' => 'employees',
@@ -71,7 +78,7 @@ class WorkspaceController extends Controller
         foreach ([
             'customers' => $has('customers', 'invoices', 'receipts', 'gate-passes', 'ledgers'),
             'invoices' => $has('invoices', 'receipts', 'gate-passes', 'ledgers'),
-            'fabric_costings' => $has('costing', 'invoices'),
+            'fabric_costings' => $has('costing'),
             'invoice_items' => $has('invoices', 'gate-passes', 'ledgers'),
             'receipts' => $has('receipts', 'ledgers'),
             'allocations' => $has('invoices', 'receipts', 'ledgers'),
