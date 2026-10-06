@@ -1,7 +1,7 @@
 <?php
 
-use App\Http\Controllers\WorkspaceController;
 use App\Http\Controllers\AdminManagementController;
+use App\Http\Controllers\WorkspaceController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
@@ -17,5 +17,6 @@ Route::middleware('auth')->group(function () {
     Route::put('/admin-management/users/{user}/modules', [AdminManagementController::class, 'updateModules'])->name('admin-management.modules');
     Route::post('/actions/{action}', [WorkspaceController::class, 'store'])->name('actions.store');
     Route::get('/', [WorkspaceController::class, 'index'])->name('dashboard');
+    Route::get('/{page}/create', [WorkspaceController::class, 'createPage'])->where('page', 'customers|invoices|costing|receipts|cashbook|employees|attendance|payrolls|expenses|fixed-expenses|gate-passes')->name('workspace.create');
     Route::get('/{page}/{id?}', [WorkspaceController::class, 'index'])->where('id', '[0-9]+')->name('workspace');
 });

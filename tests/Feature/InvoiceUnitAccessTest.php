@@ -69,6 +69,18 @@ class InvoiceUnitAccessTest extends TestCase
         $this->assertDatabaseHas('fabric_costings', ['owner_id' => $admin->id, 'name' => 'Plain cotton']);
     }
 
+    public function test_module_create_page_renders_the_standalone_form_for_an_enabled_module(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin', 'modules' => ['dashboard', 'customers']]);
+
+        $this->actingAs($admin)->get('/customers/create')->assertOk()
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->where('page', 'customers')
+                ->where('createAction', 'customers'));
+
+        $this->get('/invoices/create')->assertForbidden();
+    }
+
     public function test_saved_costing_name_route_opens_its_calculation_details(): void
     {
         $admin = User::factory()->create(['role' => 'admin', 'modules' => ['dashboard', 'costing']]);

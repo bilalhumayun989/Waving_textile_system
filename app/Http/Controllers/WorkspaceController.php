@@ -13,7 +13,7 @@ use Inertia\Response;
 
 class WorkspaceController extends Controller
 {
-    public function index(Request $request, TextileService $service, string $page = 'dashboard', ?string $id = null): Response
+    public function index(Request $request, TextileService $service, string $page = 'dashboard', ?string $id = null, bool $creating = false): Response
     {
         if ($page === 'dashboard' && ! $request->user()->canAccessModule('dashboard')) {
             return redirect('/'.($request->user()->accessibleModules()[0] ?? 'admin-management'));
@@ -36,8 +36,17 @@ class WorkspaceController extends Controller
             abort_unless(collect($data[$tables[$page] ?? $page] ?? [])->contains('id', (int) $id), 404);
         }
 
-        return Inertia::render('Workspace', ['page' => $page, 'recordId' => $id ? (int) $id : null,
+        $createAction = $creating ? ($page === 'cashbook' ? 'accounts' : $page) : null;
+
+        return Inertia::render('Workspace', ['page' => $page, 'recordId' => $id ? (int) $id : null, 'createAction' => $createAction,
             'data' => $data, 'today' => today()->toDateString(), 'demo' => config('app.demo', false)]);
+    }
+
+    public function createPage(Request $request, TextileService $service, string $page): Response
+    {
+        abort_unless(in_array($page, ['customers', 'invoices', 'costing', 'receipts', 'cashbook', 'employees', 'attendance', 'payrolls', 'expenses', 'fixed-expenses', 'gate-passes'], true), 404);
+
+        return $this->index($request, $service, $page, null, true);
     }
 
     public function store(Request $request, TextileService $service, string $action): RedirectResponse
