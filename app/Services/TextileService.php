@@ -204,7 +204,29 @@ class TextileService
             'warp_count' => 'required|numeric|gt:0|max:100000', 'weft_count' => 'required|numeric|gt:0|max:100000',
             'width' => 'required|numeric|gt:0|max:100000', 'yarn_warp_rate' => 'required|numeric|min:0|max:100000000',
             'yarn_weft_rate' => 'required|numeric|min:0|max:100000000', 'conversion_rate' => 'required|numeric|min:0|max:100000000',
+            'contract_date' => 'nullable|date_format:Y-m-d', 'contract_no' => 'nullable|string|max:60',
+            'party_contract_no' => 'nullable|string|max:80', 'delivery_date' => 'nullable|date_format:Y-m-d',
+            'closed' => 'nullable|boolean', 'contract_type' => 'nullable|in:Grey Sale,Conversion', 'loom_type' => 'nullable|string|max:40',
+            'buyer_code' => 'nullable|string|max:40', 'buyer_name' => 'nullable|string|max:120', 'buyer_gst' => 'nullable|string|max:40',
+            'broker_code' => 'nullable|string|max:40', 'broker_name' => 'nullable|string|max:120',
+            'broker_commission_per_meter' => 'nullable|numeric|min:0|max:100000000',
+            'quality_code' => 'nullable|string|max:40', 'contract_quality' => 'nullable|string|max:120',
+            'contract_quality_width' => 'nullable|numeric|gt:0|max:100000', 'panna' => 'nullable|numeric|gt:0|max:100000',
+            'kp_percentage' => 'nullable|numeric|between:0,100', 'kp_days' => 'nullable|integer|between:0,3650',
+            'pp_percentage' => 'nullable|numeric|between:0,100', 'pp_days' => 'nullable|integer|between:0,3650',
+            'delivery_instructions' => 'nullable|string|max:2000', 'payment_instructions' => 'nullable|string|max:2000',
+            'quality_instructions' => 'nullable|string|max:2000', 'other_instructions' => 'nullable|string|max:2000',
         ])->validate();
+        foreach (['contract_date', 'delivery_date', 'contract_no', 'party_contract_no', 'contract_type', 'loom_type',
+            'buyer_code', 'buyer_name', 'buyer_gst', 'broker_code', 'broker_name', 'quality_code', 'contract_quality',
+            'delivery_instructions', 'payment_instructions', 'quality_instructions', 'other_instructions'] as $field) {
+            $data[$field] = $data[$field] ?? null;
+        }
+        foreach (['broker_commission_per_meter', 'kp_percentage', 'kp_days', 'pp_percentage', 'pp_days'] as $field) {
+            $data[$field] = $data[$field] ?? 0;
+        }
+        $data['closed'] = (bool) ($data['closed'] ?? false);
+        $data['panna'] = $data['panna'] ?? 1;
         $result = FabricCosting::calculate($data);
         $persist = collect($result)->except(['fabric_rate_per_mtr', 'contract_value', 'conv_value', 'yarn_value', 'sales_tax_amount', 'warp_amount_per_mtr', 'weft_amount_per_mtr', 'conversion_per_mtr'])->all();
         $persist['fabric_rate_per_mtr'] = self::cents($result['fabric_rate_per_mtr']);

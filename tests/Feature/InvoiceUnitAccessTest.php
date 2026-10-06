@@ -69,6 +69,40 @@ class InvoiceUnitAccessTest extends TestCase
         $this->assertDatabaseHas('fabric_costings', ['owner_id' => $admin->id, 'name' => 'Plain cotton']);
     }
 
+    public function test_costing_contract_details_are_saved_with_the_calculation(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin', 'modules' => ['dashboard', 'costing']]);
+
+        $this->actingAs($admin)->post('/actions/fabric-costings', [
+            'submission_key' => (string) Str::uuid(), 'name' => 'Plain cotton', 'quantity' => 1000,
+            'read' => 60, 'pick' => 40, 'warp_count' => 40, 'weft_count' => 40, 'width' => 44,
+            'yarn_warp_rate' => 250, 'yarn_weft_rate' => 240, 'conversion_rate' => 0.02,
+            'contract_date' => '2026-10-01', 'contract_no' => 'GC-1001', 'party_contract_no' => 'BUY-44',
+            'delivery_date' => '2026-12-01', 'closed' => true, 'contract_type' => 'Grey Sale',
+            'loom_type' => 'Shuttleless', 'buyer_code' => 'B-001', 'buyer_name' => 'Example Buyer',
+            'buyer_gst' => 'GST-001', 'broker_code' => 'BR-001', 'broker_name' => 'Example Broker',
+            'broker_commission_per_meter' => 0.5, 'quality_code' => 'Q-01', 'contract_quality' => 'Cotton plain',
+            'contract_quality_width' => 44, 'panna' => 1, 'kp_percentage' => 2, 'kp_days' => 10,
+            'pp_percentage' => 1, 'pp_days' => 20, 'delivery_instructions' => 'Deliver to warehouse',
+        ])->assertRedirect();
+
+        $this->assertDatabaseHas('fabric_costings', [
+            'owner_id' => $admin->id, 'contract_no' => 'GC-1001', 'buyer_name' => 'Example Buyer',
+            'contract_quality' => 'Cotton plain', 'closed' => true, 'delivery_instructions' => 'Deliver to warehouse',
+            'kp_percentage' => 2, 'kp_days' => 10, 'pp_percentage' => 1, 'pp_days' => 20,
+            'broker_commission_per_meter' => 0.5, 'contract_quality_width' => 44, 'panna' => 1,
+        ]);
+        $costing = DB::table('fabric_costings')->where('owner_id', $admin->id)->first();
+        $this->assertSame(1000, (int) $costing->quantity);
+        $this->assertSame(1, (int) $costing->closed);
+        $this->assertSame('2026-10-01', $costing->contract_date);
+        $this->assertGreaterThan(0, (int) $costing->fabric_rate_per_mtr);
+        $this->assertSame(3777400, (int) $costing->contract_value);
+        $this->assertSame(642158, (int) $costing->sales_tax_amount);
+        $this->assertSame(3697400, (int) $costing->yarn_value);
+        $this->assertSame(3777, (int) $costing->fabric_rate_per_mtr);
+    }
+
     public function test_module_create_page_renders_the_standalone_form_for_an_enabled_module(): void
     {
         $admin = User::factory()->create(['role' => 'admin', 'modules' => ['dashboard', 'customers']]);
